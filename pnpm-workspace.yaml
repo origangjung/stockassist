@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  # Next.js uses sharp for optimized production images. Other dependency scripts stay blocked.
+  sharp: true
+overrides:
+  postcss: 8.5.10

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: StockPilot
+    orgId: 1
+    folder: StockPilot
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards

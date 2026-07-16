@@ -1,0 +1,50 @@
+groups:
+  - name: stockpilot-api
+    rules:
+      - alert: StockPilotApiUnavailable
+        expr: up{job="stockpilot-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: stockpilot-api
+        annotations:
+          summary: StockPilot API metrics target is unavailable
+          description: Prometheus has been unable to scrape the API for at least one minute.
+
+      - alert: StockPilotRequiredDependencyDown
+        expr: stockpilot_dependency_ready == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: stockpilot-api
+        annotations:
+          summary: A required StockPilot dependency is down
+          description: "Dependency {{ $labels.dependency }} has failed readiness checks."
+
+      - alert: StockPilotHighServerErrorRate
+        expr: |
+          sum(rate(stockpilot_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(stockpilot_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: stockpilot-api
+        annotations:
+          summary: StockPilot API 5xx ratio exceeds 5 percent
+          description: More than 5 percent of API requests have failed for five minutes.
+
+      - alert: StockPilotHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(stockpilot_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: stockpilot-api
+        annotations:
+          summary: StockPilot API p95 latency exceeds two seconds
+          description: The API p95 response time has remained above two seconds for five minutes.

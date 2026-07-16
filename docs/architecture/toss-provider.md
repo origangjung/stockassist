@@ -1,0 +1,39 @@
+# TossProvider (Phase 8)
+
+## 범위
+
+`STOCK_PROVIDER=toss`로 설정하면 Broker Adapter가 TossProvider를 사용한다. 현재 구현 범위는 다음과 같다.
+
+- OAuth 2.0 Client Credentials 토큰 발급과 캐시
+- 현재가, 1일봉, 호가, 체결, 종목 정보, 투자유의 조회
+- API 그룹별 토큰 버킷과 응답 헤더 기반 동적 한도 반영
+- 429 `Retry-After` + 지수 백오프 + jitter
+- `expired-token` 1회 자동 재발급
+- Toss 오류의 `code`, `requestId`, `data`를 내부 Provider 오류로 변환
+- 성공·실패 호출의 외부 `requestId`와 내부 요청 ID를 `provider_audit_logs`에 보존한다.
+  감사 이력에는 토큰, 계좌번호, 쿼리/본문, 응답 본문을 저장하지 않으며 관리자 전용
+  `GET /api/v1/admin/provider-audits`에서 조회한다.
+
+주문, 조건주문, 계좌 동기화는 Toss API 자체의 기능과 별개로 아직 애플리케이션 계약이 구현되지 않았으므로 capability를 비활성 상태로 둔다.
+
+## 설정
+
+```dotenv
+STOCK_PROVIDER=toss
+TOSS_BASE_URL=https://openapi.tossinvest.com
+TOSS_CLIENT_ID=...
+TOSS_CLIENT_SECRET=...
+REDIS_URL=redis://redis:6379/0
+```
+
+자격증명은 서버 환경에만 둔다. Toss 허용 IP에 배포 환경의 고정 Egress IP가 등록되어 있어야 한다.
+
+## 토큰과 장애 처리
+
+액세스 토큰은 Redis TTL과 프로세스 메모리에 계층형으로 저장한다. Redis가 일시적으로 응답하지 않으면 메모리 캐시로 계속 동작한다. Toss는 한 client당 유효한 액세스 토큰을 하나만 허용하므로 운영 환경에서는 모든 API 워커가 같은 Redis를 사용해야 한다.
+
+현재가 공식 응답에는 등락, 등락률, 거래량이 없고 체결 응답에는 매수·매도 방향이 없다. 데이터 오염을 막기 위해 해당 필드는 추정하지 않고 `null`로 반환한다.
+
+## 검증
+
+실제 자격증명이나 주문 없이 `httpx2.MockTransport`로 OAuth 캐시, 만료 재발급, 429 재시도, 오류 매핑, 페이지네이션, warnings의 계약을 테스트한다. 실계정 smoke test는 허용 IP와 별도 테스트 자격증명이 준비된 환경에서만 수행한다.
