@@ -88,4 +88,8 @@ nav a { margin-left: 14px; color: #9fb0c7; font-size: 12px; text-decoration: non
 .provider-audit-outcome.error { background: #46262d; color: #ff8c9d; }
 .provider-audit-outcome.transport_error { background: #493b19; color: #f3cb66; }
 .provider-audit-ids code { max-width: 220px; }
+.provider-audit-cleanup-result { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid #2d5c4e; border-radius: 8px; background: #0d211d; color: #8fa2ba; font-size: 11px; }
+.provider-audit-cleanup-result b { color: #61d9a4; }
+.provider-audit-cleanup-result.disabled, .provider-audit-cleanup-result.failed { border-color: #683945; background: #211319; }
+.provider-audit-cleanup-result.disabled b, .provider-audit-cleanup-result.failed b { color: #ff8295; }
 @media (max-width: 680px) { .provider-audit-admin .admin-heading form { display: grid; grid-template-columns: 1fr; width: 100%; } .provider-audit-admin .admin-heading { align-items: stretch; flex-direction: column; } }

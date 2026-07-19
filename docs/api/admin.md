@@ -25,6 +25,8 @@ Sensitive responses are marked `Cache-Control: no-store, private`.
 - `GET /api/v1/admin/data-quality?limit=50&offset=0&symbol=005930&severity=error`
 - `GET /api/v1/admin/ingestion`
 - `POST /api/v1/admin/ingestion/{symbol}?limit=120`
+- `GET /api/v1/admin/provider-audits?limit=50&offset=0&provider=toss&outcome=error`
+- `POST /api/v1/admin/provider-audits/cleanup`
 - `GET /api/v1/admin/backtests?limit=25&offset=0&symbol=005930`
 - `GET /api/v1/admin/backtests/{run_id}`
 - `GET /api/v1/admin/models?symbol=005930&algorithm=xgboost&horizon_days=5`
@@ -55,6 +57,15 @@ settings. Manual ingestion is an explicit administrator action and accepts 30–
 validated symbol. It persists raw and cleaned candles plus quality logs, but never calls account or
 order capabilities. Automatic scheduling requires persistence and accepts at most 50 unique
 symbols from `SCHEDULER_SYMBOLS`.
+
+Provider audit history stores only bounded operational metadata: provider, method, endpoint path,
+API group, outcome, status, attempt count, duration and internal/external request IDs. It never
+stores credentials, account numbers, query parameters, request bodies or response bodies.
+`PROVIDER_AUDIT_CLEANUP_ENABLED=true` schedules a daily cleanup at minute 15 of the configured
+`PROVIDER_AUDIT_CLEANUP_HOUR_KST`; the default retention is 90 days and the accepted range is
+7–3650 days. The manual cleanup endpoint applies only this configured cutoff and can delete only
+rows from `provider_audit_logs`. Cleanup failures are reported in operations status without
+interrupting market-data requests or API startup.
 
 The broker account endpoints use the same `X-Admin-Key` boundary even though their paths are not
 under `/admin`. Account numbers are masked, synchronization is read-only, and portfolio results

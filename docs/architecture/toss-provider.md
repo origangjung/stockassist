@@ -13,6 +13,9 @@
 - 성공·실패 호출의 외부 `requestId`와 내부 요청 ID를 `provider_audit_logs`에 보존한다.
   감사 이력에는 토큰, 계좌번호, 쿼리/본문, 응답 본문을 저장하지 않으며 관리자 전용
   `GET /api/v1/admin/provider-audits`에서 조회한다.
+- `PROVIDER_AUDIT_CLEANUP_ENABLED=true`이면 기본 90일 보존 기간을 지난 감사 행만 매일
+  정리한다. 관리자 수동 정리 API도 동일한 외부화된 cutoff만 사용하며 감사 저장·정리
+  실패는 시세 호출 결과를 변경하지 않는다.
 
 주문, 조건주문, 계좌 동기화는 Toss API 자체의 기능과 별개로 아직 애플리케이션 계약이 구현되지 않았으므로 capability를 비활성 상태로 둔다.
 

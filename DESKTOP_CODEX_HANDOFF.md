@@ -4,6 +4,16 @@
 > 작업 경로: `C:\stock_assist`
 > 기준 설계: StockPilot AI Master Project Blueprint v2.1
 
+## 작업 분담 원칙
+
+- 노트북: 일반 코드 구현, 문서, 단위·통합 테스트, TypeScript 검사, 가벼운 로컬 검증
+- 데스크탑: Docker 전체 재빌드, PostgreSQL 백업·복구 리허설, 장시간 soak/load 테스트,
+  대형 ML 의존성 설치와 XGBoost 장기 학습
+- 노트북 작업을 완료하고 테스트한 뒤 `main`에 push하면 데스크탑은 pull하여 무거운
+  검증만 수행한다. 데스크탑 결과도 코드·문서·측정 보고서 형태로 commit/push한다.
+- 두 환경에서 동시에 같은 파일을 수정하지 않는다. 작업을 넘기기 전 항상 push하고,
+  이어받는 환경에서는 먼저 pull한다.
+
 ## 1. 데스크탑 Codex에게 바로 전달할 요청
 
 아래 내용을 새 Codex 대화의 첫 요청으로 전달한다.
@@ -13,11 +23,9 @@ C:\stock_assist의 StockPilot AI 프로젝트 작업을 이어서 진행해줘.
 먼저 DESKTOP_CODEX_HANDOFF.md를 끝까지 읽고, 현재 코드와 테스트 결과가 문서 내용과
 일치하는지 읽기 전용으로 확인해. .env의 실제 비밀 값은 출력하거나 문서화하지 마.
 
-다음 우선 작업은 Provider 감사 로그 보존 정책과 자동 정리 기능이다.
-PROVIDER_AUDIT_RETENTION_DAYS 같은 외부화된 설정, 오래된 감사 로그 삭제 Repository,
-스케줄러 연동, 운영 상태 표시, 관리자 API, 단위/통합 테스트와 문서를 구현해.
-감사 정리 실패가 시세 조회를 중단시키면 안 되고, 삭제 범위는 provider_audit_logs로
-제한해. 기존 사용자 변경을 보존하고 apply_patch로 수정해.
+이 프로젝트는 노트북에서 일반 개발을 진행하고 데스크탑에서는 용량이 큰 검증만 한다.
+현재 요청받은 작업 범위가 Docker 전체 재빌드, PostgreSQL 복구 리허설, 장시간 부하·실데이터
+테스트 또는 대형 ML 학습인지 먼저 확인해. 해당 범위가 아니면 코드 변경 없이 상태만 보고해.
 
 작업 후 다음 명령으로 검증해:
 - .venv\Scripts\ruff.exe check backend
@@ -70,6 +78,7 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 - 관리자 전용 `GET /api/v1/admin/provider-audits` 추가
 - 관리자 BFF `/api/admin/provider-audits` 및 운영 화면 추가
 - Alembic revision `20260716_0016`이 현재 head
+- Provider 감사 로그 기본 90일 보존, 일일 자동 정리, 관리자 수동 정리와 운영 상태 표시
 
 주요 파일:
 
@@ -87,7 +96,7 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 
 마지막으로 확인된 결과:
 
-- 백엔드 전체 테스트: `164 passed`
+- 백엔드 전체 테스트: `170 passed`
 - 최근 관리자·감사 집중 테스트: `15 passed`
 - Ruff 검사: 통과
 - 프론트 TypeScript 검사: 통과
@@ -105,8 +114,8 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 
 주의할 점:
 
-- 현재 경로는 Git 저장소로 초기화되어 있지 않아 `git status`나 `git diff`를 사용할 수
-  없었다. Git 초기화는 사용자의 명시적 요청 없이 수행하지 않는다.
+- Git 원격은 `https://github.com/origangjung/stockassist.git`, 기본 브랜치는 `main`이다.
+  데스크탑 작업 전 `git pull --ff-only origin main`으로 노트북 완료분을 먼저 받는다.
 - `ruff format --check backend`는 이번 작업과 무관한 기존 파일 일부도 포맷 대상으로
   표시한다. 전역 자동 포맷으로 사용자 변경을 넓게 수정하지 않는다.
 - PowerShell 출력에서 UTF-8 한국어가 깨져 보일 수 있다. 실제 파일 인코딩을 임의로
@@ -114,11 +123,9 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 
 ## 5. 다음 작업 우선순위
 
-### 우선순위 1 — Provider 감사 로그 보존과 자동 정리
+### 완료 — Provider 감사 로그 보존과 자동 정리
 
-가장 먼저 진행할 작업이다.
-
-권장 범위:
+다음 항목이 구현되었다.
 
 1. `PROVIDER_AUDIT_RETENTION_DAYS` 설정 추가
 2. 운영 기본값과 최소·최대 범위 검증
@@ -126,21 +133,21 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 4. APScheduler를 이용한 하루 1회 정리 작업
 5. 삭제 건수, 마지막 성공 시각, 마지막 오류를 운영 상태에 표시
 6. 정리 실패는 로깅하되 시장 데이터 요청과 서버 시작을 막지 않도록 격리
-7. 관리자 전용 수동 정리 API가 필요하다면 dry-run 또는 명시적 범위 제한 적용
+7. 관리자 전용 수동 정리 API에 명시적 보존 범위 제한 적용
 8. SQLite/PostgreSQL 호환 테스트, 설정 테스트, 관리자 인증 테스트 추가
 9. `.env.example`, 보안·운영·Toss Provider 문서 갱신
 
 삭제 대상은 반드시 `provider_audit_logs`로 제한하고 다른 감사·AI 리포트·백테스트
 이력을 함께 삭제하지 않는다.
 
-### 우선순위 2 — 운영 데이터 수명주기
+### 다음 노트북 작업 — 운영 데이터 수명주기
 
 - 뉴스, 공시, 시세 캐시, 데이터 품질 로그의 테이블별 보존 정책
 - PostgreSQL 백업 및 실제 복구 리허설 문서
 - 월 파티션 생성뿐 아니라 오래된 파티션 보관·아카이브 정책
 - 감사 로그와 사용자 분석 이력의 보존 기간 분리
 
-### 우선순위 3 — 실데이터 장시간 검증
+### 다음 데스크탑 작업 — 실데이터 장시간 검증
 
 - 장 운영 시간대 Toss REST 폴링 soak test
 - Toss 401/403/429/5xx와 `Retry-After` 실제 동작 확인

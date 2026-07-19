@@ -1,6 +1,8 @@
 from dataclasses import asdict
 
-from sqlalchemy import func, select
+from datetime import datetime
+
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.provider_audit import ProviderAuditLogModel
@@ -66,3 +68,10 @@ class SqlAlchemyProviderAuditRepository:
                 ],
                 total,
             )
+
+    def delete_before(self, cutoff: datetime) -> int:
+        with self._sessions.begin() as session:
+            result = session.execute(
+                delete(ProviderAuditLogModel).where(ProviderAuditLogModel.occurred_at < cutoff)
+            )
+            return max(result.rowcount or 0, 0)

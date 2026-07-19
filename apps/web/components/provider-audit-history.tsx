@@ -1,8 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { fetchProviderAuditHistory, ProviderAuditOutcome } from "../lib/admin-api";
+import {
+  cleanupProviderAuditHistory,
+  fetchProviderAuditHistory,
+  ProviderAuditOutcome,
+} from "../lib/admin-api";
 
 const PAGE_SIZE = 25;
 
@@ -22,6 +26,7 @@ function requestId(value: string | null): string {
 }
 
 export function ProviderAuditHistoryPanel() {
+  const queryClient = useQueryClient();
   const [provider, setProvider] = useState("");
   const [outcome, setOutcome] = useState<"" | ProviderAuditOutcome>("");
   const [offset, setOffset] = useState(0);
@@ -32,6 +37,15 @@ export function ProviderAuditHistoryPanel() {
     retry: 1,
   });
   const data = query.data;
+  const cleanup = useMutation({
+    mutationFn: cleanupProviderAuditHistory,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "provider-audits"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "operations-status"] }),
+      ]);
+    },
+  });
 
   const changeProvider = (value: string) => {
     setProvider(value);
@@ -41,6 +55,16 @@ export function ProviderAuditHistoryPanel() {
   const changeOutcome = (value: "" | ProviderAuditOutcome) => {
     setOutcome(value);
     setOffset(0);
+  };
+
+  const runCleanup = () => {
+    if (
+      window.confirm(
+        "설정된 보존 기간보다 오래된 Provider 감사 이력만 삭제합니다. 계속할까요?",
+      )
+    ) {
+      cleanup.mutate();
+    }
   };
 
   return (
@@ -74,6 +98,9 @@ export function ProviderAuditHistoryPanel() {
           <button disabled={query.isFetching} onClick={() => query.refetch()} type="button">
             새로고침
           </button>
+          <button disabled={cleanup.isPending} onClick={runCleanup} type="button">
+            {cleanup.isPending ? "정리 중" : "만료 이력 정리"}
+          </button>
         </form>
       </header>
 
@@ -81,6 +108,20 @@ export function ProviderAuditHistoryPanel() {
         토큰, 계좌번호, 쿼리·요청 본문과 응답 본문은 저장하지 않습니다. 내부 요청 ID와
         Provider 요청 ID만 장애 추적에 사용합니다.
       </p>
+      {cleanup.data && (
+        <div className={`provider-audit-cleanup-result ${cleanup.data.status}`}>
+          <b>정리 상태: {cleanup.data.status}</b>
+          <span>
+            보존 {cleanup.data.retention_days}일 · 삭제 {cleanup.data.last_deleted_count ?? 0}건
+          </span>
+        </div>
+      )}
+      {cleanup.isError && (
+        <div className="admin-state error">
+          <b>감사 이력 정리 요청 실패</b>
+          <span>{cleanup.error.message}</span>
+        </div>
+      )}
 
       {query.isPending && (
         <div className="admin-state">외부 API 감사 이력을 불러오는 중입니다.</div>

@@ -53,7 +53,10 @@ from app.services.portfolio import PortfolioService
 from app.services.alerts import ReferenceAlertService
 from app.services.operations import OperationsStatusService
 from app.services.data_quality import DataQualityHistoryService
-from app.services.provider_audit import ProviderAuditHistoryService
+from app.services.provider_audit import (
+    ProviderAuditHistoryService,
+    ProviderAuditMaintenanceService,
+)
 from app.services.ingestion import CandleIngestionService, IngestionOperationsService
 from app.alerts import SqlAlchemyAlertRepository
 from app.realtime import build_realtime_quote_hub
@@ -81,6 +84,12 @@ sentry_enabled = configure_sentry(settings)
 sessions = create_session_factory(settings.database_url) if settings.persistence_enabled else None
 provider_audit_repository = (
     SqlAlchemyProviderAuditRepository(sessions) if sessions is not None else None
+)
+provider_audit_maintenance_service = ProviderAuditMaintenanceService(
+    provider_audit_repository,
+    enabled=settings.provider_audit_cleanup_enabled,
+    retention_days=settings.provider_audit_retention_days,
+    cleanup_hour_kst=settings.provider_audit_cleanup_hour_kst,
 )
 providers = build_providers(settings, audit_sink=provider_audit_repository)
 broker_adapter = BrokerAdapter(providers)
@@ -157,6 +166,7 @@ operations_status_service = OperationsStatusService(
     settings,
     health_service,
     partition_maintenance_service,
+    provider_audit_maintenance_service,
 )
 data_quality_history_service = DataQualityHistoryService(quality_log_repository)
 provider_audit_history_service = ProviderAuditHistoryService(provider_audit_repository)
@@ -189,6 +199,7 @@ async def lifespan(_: FastAPI):
             settings.scheduler_enabled
             or settings.reference_alerts_enabled
             or settings.partition_maintenance_enabled
+            or settings.provider_audit_cleanup_enabled
         ):
             from app.scheduler import build_scheduler
 
@@ -197,6 +208,7 @@ async def lifespan(_: FastAPI):
                 broker_adapter,
                 ingestion_service=ingestion_service,
                 partition_service=partition_maintenance_service,
+                provider_audit_service=provider_audit_maintenance_service,
             )
             scheduler.start()
         yield

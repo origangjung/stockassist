@@ -81,3 +81,18 @@ docker compose --profile monitoring up --build
 Prometheus is available on port 9090, Alertmanager on port 9093 and Grafana on port 3001. Grafana provisions the Prometheus
 data source and the `StockPilot API Operations` dashboard automatically. Set a strong
 `GRAFANA_ADMIN_PASSWORD` before starting the profile outside an isolated local machine.
+
+## Provider audit retention
+
+External provider audit rows have an independent lifecycle. Set
+`PROVIDER_AUDIT_CLEANUP_ENABLED=true` with persistence enabled to delete rows older than
+`PROVIDER_AUDIT_RETENTION_DAYS` once per day. The default retention is 90 days, the accepted range
+is 7–3650 days, and `PROVIDER_AUDIT_CLEANUP_HOUR_KST` selects the KST hour; the job runs at minute
+15. It also runs once when the scheduler starts so an overdue backlog does not wait until the next
+daily window.
+
+The maintenance service records only its last run, cutoff, deleted count and exception type for
+the authenticated operations status response. Database exception messages are not returned. A
+cleanup failure is logged and reported as `failed`, but does not stop API startup, scheduled market
+data ingestion or provider requests. Both automatic and manual cleanup are bounded to the
+`provider_audit_logs` table and the configured retention cutoff.

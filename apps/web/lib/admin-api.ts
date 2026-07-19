@@ -360,6 +360,7 @@ export interface OperationsStatus {
     items: Array<{ name: string; bounds: string }>;
     lookahead_months: number;
   };
+  provider_audit: ProviderAuditMaintenanceStatus;
 }
 
 export interface DataQualityLogItem {
@@ -405,6 +406,17 @@ export interface ProviderAuditHistory {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface ProviderAuditMaintenanceStatus {
+  status: "disabled" | "pending" | "healthy" | "failed";
+  enabled: boolean;
+  retention_days: number;
+  cleanup_hour_kst: number;
+  last_run_at: string | null;
+  last_cutoff: string | null;
+  last_deleted_count: number | null;
+  last_error_type: string | null;
 }
 
 export interface IngestionStatus {
@@ -579,6 +591,12 @@ export function fetchProviderAuditHistory(
   if (provider) params.set("provider", provider);
   if (outcome) params.set("outcome", outcome);
   return request<ProviderAuditHistory>(`/api/admin/provider-audits?${params}`);
+}
+
+export function cleanupProviderAuditHistory(): Promise<ProviderAuditMaintenanceStatus> {
+  return request<ProviderAuditMaintenanceStatus>("/api/admin/provider-audits/cleanup", {
+    method: "POST",
+  });
 }
 
 export function fetchIngestionStatus(): Promise<IngestionStatus> {

@@ -41,7 +41,10 @@ from app.services.alerts import (
 )
 from app.services.operations import OperationsStatusService
 from app.services.data_quality import DataQualityHistoryService
-from app.services.provider_audit import ProviderAuditHistoryService
+from app.services.provider_audit import (
+    ProviderAuditHistoryService,
+    ProviderAuditMaintenanceService,
+)
 from app.services.ingestion import IngestionOperationsService, IngestionUnavailableError
 
 router = APIRouter(prefix="/api/v1", tags=["market-data"])
@@ -147,6 +150,12 @@ def get_provider_audit_history_service() -> ProviderAuditHistoryService:
     from app.main import provider_audit_history_service
 
     return provider_audit_history_service
+
+
+def get_provider_audit_maintenance_service() -> ProviderAuditMaintenanceService:
+    from app.main import provider_audit_maintenance_service
+
+    return provider_audit_maintenance_service
 
 
 def get_ingestion_operations_service() -> IngestionOperationsService:
@@ -511,6 +520,18 @@ def get_provider_audit_history(
             outcome=outcome,
         )
     )
+
+
+@router.post(
+    "/admin/provider-audits/cleanup",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "audit"],
+    dependencies=[Depends(require_admin_access)],
+)
+def cleanup_provider_audit_history(
+    service: ProviderAuditMaintenanceService = Depends(get_provider_audit_maintenance_service),
+):
+    return envelope(service.cleanup())
 
 
 @router.post(

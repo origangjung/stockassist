@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from app.config import Settings
 from app.observability.health import HealthService
 from app.database.partitions import CandlePartitionMaintenanceService
+from app.services.provider_audit import ProviderAuditMaintenanceService
 
 
 class OperationsStatusService:
@@ -14,10 +15,12 @@ class OperationsStatusService:
         settings: Settings,
         health: HealthService,
         partitions: CandlePartitionMaintenanceService | None = None,
+        provider_audit: ProviderAuditMaintenanceService | None = None,
     ) -> None:
         self._settings = settings
         self._health = health
         self._partitions = partitions
+        self._provider_audit = provider_audit
 
     async def status(self) -> dict[str, object]:
         ready, readiness = await self._health.readiness()
@@ -58,6 +61,7 @@ class OperationsStatusService:
                 "sentry": settings.sentry_dsn is not None,
                 "partition_maintenance": settings.partition_maintenance_enabled,
                 "distributed_rate_limit": settings.rate_limit_backend == "redis",
+                "provider_audit_cleanup": settings.provider_audit_cleanup_enabled,
             },
             "realtime": {
                 "source": settings.realtime_source,
@@ -66,4 +70,18 @@ class OperationsStatusService:
                 "poll_interval_seconds": settings.realtime_poll_interval_seconds,
             },
             "partitions": partition_status,
+            "provider_audit": (
+                self._provider_audit.status()
+                if self._provider_audit is not None
+                else {
+                    "status": "disabled",
+                    "enabled": False,
+                    "retention_days": settings.provider_audit_retention_days,
+                    "cleanup_hour_kst": settings.provider_audit_cleanup_hour_kst,
+                    "last_run_at": None,
+                    "last_cutoff": None,
+                    "last_deleted_count": None,
+                    "last_error_type": None,
+                }
+            ),
         }

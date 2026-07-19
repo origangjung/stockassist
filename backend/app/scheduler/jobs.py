@@ -16,6 +16,8 @@ from app.alerts import SqlAlchemyAlertRepository
 from app.services.alerts import ReferenceAlertService
 from app.services.ingestion import CandleIngestionService
 from app.database.partitions import CandlePartitionMaintenanceService
+from app.repositories.provider_audit import SqlAlchemyProviderAuditRepository
+from app.services.provider_audit import ProviderAuditMaintenanceService
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ def build_scheduler(
     broker: BrokerAdapter,
     ingestion_service: CandleIngestionService | None = None,
     partition_service: CandlePartitionMaintenanceService | None = None,
+    provider_audit_service: ProviderAuditMaintenanceService | None = None,
 ) -> BackgroundScheduler:
     sessions = create_session_factory(settings.database_url)
     scheduler = BackgroundScheduler(timezone="Asia/Seoul")
@@ -91,5 +94,30 @@ def build_scheduler(
         logger.info(
             "Configured reference alert evaluation interval_seconds=%s",
             settings.reference_alert_interval_seconds,
+        )
+    if settings.provider_audit_cleanup_enabled:
+        audit_maintenance = provider_audit_service or ProviderAuditMaintenanceService(
+            SqlAlchemyProviderAuditRepository(sessions),
+            enabled=True,
+            retention_days=settings.provider_audit_retention_days,
+            cleanup_hour_kst=settings.provider_audit_cleanup_hour_kst,
+        )
+        scheduler.add_job(
+            audit_maintenance.cleanup,
+            trigger="cron",
+            hour=settings.provider_audit_cleanup_hour_kst,
+            minute=15,
+            id="provider-audit-cleanup",
+            name="Delete expired external provider audit logs",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=3600,
+            next_run_time=datetime.now(ZoneInfo("Asia/Seoul")),
+        )
+        logger.info(
+            "Configured provider audit cleanup retention_days=%s hour_kst=%s",
+            settings.provider_audit_retention_days,
+            settings.provider_audit_cleanup_hour_kst,
         )
     return scheduler

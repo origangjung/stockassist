@@ -49,3 +49,7 @@ class ProviderAuditReadRepository(Protocol):
         provider: str | None = None,
         outcome: str | None = None,
     ) -> tuple[list[ProviderAuditRecord], int]: ...
+
+
+class ProviderAuditMaintenanceRepository(Protocol):
+    def delete_before(self, cutoff: datetime) -> int: ...

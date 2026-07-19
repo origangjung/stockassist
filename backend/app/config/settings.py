@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     scheduler_ingestion_limit: int = Field(default=120, ge=30, le=365)
     partition_maintenance_enabled: bool = False
     partition_lookahead_months: int = Field(default=3, ge=1, le=12)
+    provider_audit_cleanup_enabled: bool = False
+    provider_audit_retention_days: int = Field(default=90, ge=7, le=3650)
+    provider_audit_cleanup_hour_kst: int = Field(default=4, ge=0, le=23)
     persistence_enabled: bool = False
     admin_api_key: SecretStr | None = None
     admin_max_failed_attempts: int = Field(default=5, ge=3, le=20)
@@ -86,6 +89,8 @@ class Settings(BaseSettings):
             raise ValueError("SCHEDULER_ENABLED requires PERSISTENCE_ENABLED=true")
         if self.partition_maintenance_enabled and not self.persistence_enabled:
             raise ValueError("PARTITION_MAINTENANCE_ENABLED requires PERSISTENCE_ENABLED=true")
+        if self.provider_audit_cleanup_enabled and not self.persistence_enabled:
+            raise ValueError("PROVIDER_AUDIT_CLEANUP_ENABLED requires PERSISTENCE_ENABLED=true")
         if self.reference_alerts_enabled and not self.persistence_enabled:
             raise ValueError("REFERENCE_ALERTS_ENABLED requires PERSISTENCE_ENABLED=true")
         origins = self.allowed_origins
