@@ -361,6 +361,7 @@ export interface OperationsStatus {
     lookahead_months: number;
   };
   provider_audit: ProviderAuditMaintenanceStatus;
+  data_lifecycle: DataLifecycleStatus;
 }
 
 export interface DataQualityLogItem {
@@ -417,6 +418,23 @@ export interface ProviderAuditMaintenanceStatus {
   last_cutoff: string | null;
   last_deleted_count: number | null;
   last_error_type: string | null;
+}
+
+export interface DataLifecycleStatus {
+  status: "disabled" | "pending" | "healthy" | "failed";
+  enabled: boolean;
+  retention_days: Record<string, number>;
+  cleanup_hour_kst: number;
+  last_run_at: string | null;
+  last_deleted_counts: Record<string, number> | null;
+  last_error_type: string | null;
+}
+
+export interface DataLifecyclePreview extends DataLifecycleStatus {
+  preview_status?: "ready" | "failed";
+  eligible_counts: Record<string, number> | null;
+  cutoffs: Record<string, string> | null;
+  preview_error_type?: string | null;
 }
 
 export interface IngestionStatus {
@@ -595,6 +613,16 @@ export function fetchProviderAuditHistory(
 
 export function cleanupProviderAuditHistory(): Promise<ProviderAuditMaintenanceStatus> {
   return request<ProviderAuditMaintenanceStatus>("/api/admin/provider-audits/cleanup", {
+    method: "POST",
+  });
+}
+
+export function fetchDataLifecyclePreview(): Promise<DataLifecyclePreview> {
+  return request<DataLifecyclePreview>("/api/admin/data-lifecycle/preview");
+}
+
+export function cleanupDataLifecycle(): Promise<DataLifecycleStatus> {
+  return request<DataLifecycleStatus>("/api/admin/data-lifecycle/cleanup", {
     method: "POST",
   });
 }

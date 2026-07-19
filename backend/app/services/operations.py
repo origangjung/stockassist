@@ -5,6 +5,7 @@ from app.config import Settings
 from app.observability.health import HealthService
 from app.database.partitions import CandlePartitionMaintenanceService
 from app.services.provider_audit import ProviderAuditMaintenanceService
+from app.services.data_lifecycle import DataLifecycleMaintenanceService
 
 
 class OperationsStatusService:
@@ -16,11 +17,13 @@ class OperationsStatusService:
         health: HealthService,
         partitions: CandlePartitionMaintenanceService | None = None,
         provider_audit: ProviderAuditMaintenanceService | None = None,
+        data_lifecycle: DataLifecycleMaintenanceService | None = None,
     ) -> None:
         self._settings = settings
         self._health = health
         self._partitions = partitions
         self._provider_audit = provider_audit
+        self._data_lifecycle = data_lifecycle
 
     async def status(self) -> dict[str, object]:
         ready, readiness = await self._health.readiness()
@@ -62,6 +65,7 @@ class OperationsStatusService:
                 "partition_maintenance": settings.partition_maintenance_enabled,
                 "distributed_rate_limit": settings.rate_limit_backend == "redis",
                 "provider_audit_cleanup": settings.provider_audit_cleanup_enabled,
+                "data_lifecycle_cleanup": settings.data_lifecycle_cleanup_enabled,
             },
             "realtime": {
                 "source": settings.realtime_source,
@@ -81,6 +85,19 @@ class OperationsStatusService:
                     "last_run_at": None,
                     "last_cutoff": None,
                     "last_deleted_count": None,
+                    "last_error_type": None,
+                }
+            ),
+            "data_lifecycle": (
+                self._data_lifecycle.status()
+                if self._data_lifecycle is not None
+                else {
+                    "status": "disabled",
+                    "enabled": False,
+                    "retention_days": settings.data_retention_days,
+                    "cleanup_hour_kst": settings.data_lifecycle_cleanup_hour_kst,
+                    "last_run_at": None,
+                    "last_deleted_counts": None,
                     "last_error_type": None,
                 }
             ),

@@ -27,6 +27,8 @@ Sensitive responses are marked `Cache-Control: no-store, private`.
 - `POST /api/v1/admin/ingestion/{symbol}?limit=120`
 - `GET /api/v1/admin/provider-audits?limit=50&offset=0&provider=toss&outcome=error`
 - `POST /api/v1/admin/provider-audits/cleanup`
+- `GET /api/v1/admin/data-lifecycle/preview`
+- `POST /api/v1/admin/data-lifecycle/cleanup`
 - `GET /api/v1/admin/backtests?limit=25&offset=0&symbol=005930`
 - `GET /api/v1/admin/backtests/{run_id}`
 - `GET /api/v1/admin/models?symbol=005930&algorithm=xgboost&horizon_days=5`
@@ -66,6 +68,12 @@ stores credentials, account numbers, query parameters, request bodies or respons
 7–3650 days. The manual cleanup endpoint applies only this configured cutoff and can delete only
 rows from `provider_audit_logs`. Cleanup failures are reported in operations status without
 interrupting market-data requests or API startup.
+
+Operational lifecycle cleanup has a separate, explicit allowlist for `data_quality_logs`, `news`
+and `disclosures`. Preview returns eligible counts and storage-time cutoffs without deleting data.
+Cleanup is disabled unless `DATA_LIFECYCLE_CLEANUP_ENABLED=true`, and all deletes commit or roll
+back together. Research, account, AI and market-history tables are not part of this endpoint. See
+[Operational data lifecycle](../architecture/data-lifecycle.md).
 
 The broker account endpoints use the same `X-Admin-Key` boundary even though their paths are not
 under `/admin`. Account numbers are masked, synchronization is read-only, and portfolio results

@@ -46,6 +46,7 @@ from app.services.provider_audit import (
     ProviderAuditMaintenanceService,
 )
 from app.services.ingestion import IngestionOperationsService, IngestionUnavailableError
+from app.services.data_lifecycle import DataLifecycleMaintenanceService
 
 router = APIRouter(prefix="/api/v1", tags=["market-data"])
 
@@ -156,6 +157,12 @@ def get_provider_audit_maintenance_service() -> ProviderAuditMaintenanceService:
     from app.main import provider_audit_maintenance_service
 
     return provider_audit_maintenance_service
+
+
+def get_data_lifecycle_maintenance_service() -> DataLifecycleMaintenanceService:
+    from app.main import data_lifecycle_maintenance_service
+
+    return data_lifecycle_maintenance_service
 
 
 def get_ingestion_operations_service() -> IngestionOperationsService:
@@ -530,6 +537,30 @@ def get_provider_audit_history(
 )
 def cleanup_provider_audit_history(
     service: ProviderAuditMaintenanceService = Depends(get_provider_audit_maintenance_service),
+):
+    return envelope(service.cleanup())
+
+
+@router.get(
+    "/admin/data-lifecycle/preview",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-lifecycle"],
+    dependencies=[Depends(require_admin_access)],
+)
+def preview_data_lifecycle_cleanup(
+    service: DataLifecycleMaintenanceService = Depends(get_data_lifecycle_maintenance_service),
+):
+    return envelope(service.preview())
+
+
+@router.post(
+    "/admin/data-lifecycle/cleanup",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-lifecycle"],
+    dependencies=[Depends(require_admin_access)],
+)
+def cleanup_expired_operational_data(
+    service: DataLifecycleMaintenanceService = Depends(get_data_lifecycle_maintenance_service),
 ):
     return envelope(service.cleanup())
 

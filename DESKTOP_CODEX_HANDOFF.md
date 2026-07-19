@@ -4,6 +4,19 @@
 > 작업 경로: `C:\stock_assist`
 > 기준 설계: StockPilot AI Master Project Blueprint v2.1
 
+## 2026-07-19 최신 인계 상태
+
+노트북에서 Phase 16 운영 데이터 수명주기 기능을 구현했다. 데이터 품질 로그, 뉴스,
+공시만 고정 허용목록으로 정리하며 관리자 미리보기, 수동 실행, 일일 스케줄러, 운영 상태,
+관리자 UI와 `created_at` 인덱스 마이그레이션(`20260719_0017`)이 포함된다. 캔들, 거래,
+백테스트, 예측, AI 리포트, 모델, 포트폴리오, 보유 종목, Provider 감사 로그는 이 작업의
+자동 삭제 대상이 아니다.
+
+데스크탑에서는 [검증 체크리스트](docs/operations/desktop-validation.md)와
+[PostgreSQL 백업·복구 절차](docs/operations/postgresql-backup-restore.md)를 따라 Docker
+재빌드와 격리 복구 리허설만 수행한다. 실제 정리 전 관리자 화면의 미리보기 결과와 조직의
+보존정책을 확인하고 `DATA_LIFECYCLE_CLEANUP_ENABLED`는 승인 후 활성화한다.
+
 ## 작업 분담 원칙
 
 - 노트북: 일반 코드 구현, 문서, 단위·통합 테스트, TypeScript 검사, 가벼운 로컬 검증

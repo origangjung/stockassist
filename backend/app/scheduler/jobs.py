@@ -18,6 +18,8 @@ from app.services.ingestion import CandleIngestionService
 from app.database.partitions import CandlePartitionMaintenanceService
 from app.repositories.provider_audit import SqlAlchemyProviderAuditRepository
 from app.services.provider_audit import ProviderAuditMaintenanceService
+from app.repositories.data_lifecycle import SqlAlchemyDataLifecycleRepository
+from app.services.data_lifecycle import DataLifecycleMaintenanceService
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ def build_scheduler(
     ingestion_service: CandleIngestionService | None = None,
     partition_service: CandlePartitionMaintenanceService | None = None,
     provider_audit_service: ProviderAuditMaintenanceService | None = None,
+    data_lifecycle_service: DataLifecycleMaintenanceService | None = None,
 ) -> BackgroundScheduler:
     sessions = create_session_factory(settings.database_url)
     scheduler = BackgroundScheduler(timezone="Asia/Seoul")
@@ -119,5 +122,30 @@ def build_scheduler(
             "Configured provider audit cleanup retention_days=%s hour_kst=%s",
             settings.provider_audit_retention_days,
             settings.provider_audit_cleanup_hour_kst,
+        )
+    if settings.data_lifecycle_cleanup_enabled:
+        lifecycle = data_lifecycle_service or DataLifecycleMaintenanceService(
+            SqlAlchemyDataLifecycleRepository(sessions),
+            enabled=True,
+            retention_days=settings.data_retention_days,
+            cleanup_hour_kst=settings.data_lifecycle_cleanup_hour_kst,
+        )
+        scheduler.add_job(
+            lifecycle.cleanup,
+            trigger="cron",
+            hour=settings.data_lifecycle_cleanup_hour_kst,
+            minute=30,
+            id="operational-data-cleanup",
+            name="Delete expired operational and cached content rows",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=3600,
+            next_run_time=datetime.now(ZoneInfo("Asia/Seoul")),
+        )
+        logger.info(
+            "Configured operational data cleanup retention_days=%s hour_kst=%s",
+            settings.data_retention_days,
+            settings.data_lifecycle_cleanup_hour_kst,
         )
     return scheduler

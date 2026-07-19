@@ -19,3 +19,9 @@ PostgreSQL에서 `stock_candles`는 `timestamp` 기준 RANGE 파티션 테이블
 ```powershell
 alembic upgrade head
 ```
+
+운영성 데이터의 보존·정리 범위와 제외 대상은
+[Operational data lifecycle](data-lifecycle.md)에 정의한다. `20260719_0017` 마이그레이션은
+데이터 품질 로그, 뉴스, 공시의 `created_at` 정리 작업을 위한 인덱스를 추가한다. 백업 및
+격리 복구 절차는 [PostgreSQL backup and restore](../operations/postgresql-backup-restore.md)를
+따른다.

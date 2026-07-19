@@ -96,3 +96,11 @@ the authenticated operations status response. Database exception messages are no
 cleanup failure is logged and reported as `failed`, but does not stop API startup, scheduled market
 data ingestion or provider requests. Both automatic and manual cleanup are bounded to the
 `provider_audit_logs` table and the configured retention cutoff.
+
+## Operational lifecycle status
+
+The authenticated operations response also reports the operational data lifecycle state, policy,
+last run and per-dataset deleted counts. This status never exposes SQL, connection information or
+database exception messages. Its cleanup policy is documented in
+[Operational data lifecycle](data-lifecycle.md) and remains independent from provider audit
+retention.

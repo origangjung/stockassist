@@ -24,6 +24,7 @@ const featureLabels: Record<string, string> = {
   partition_maintenance: "월별 파티션 관리",
   distributed_rate_limit: "Redis 분산 요청 제한",
   provider_audit_cleanup: "Provider 감사 로그 자동 정리",
+  data_lifecycle_cleanup: "운영 데이터 자동 정리",
 };
 
 const dependencyLabels: Record<string, string> = {
@@ -104,6 +105,18 @@ export function OperationsStatusPanel() {
             <span>자동 정리 <b>{data.provider_audit.status}</b></span>
             {data.provider_audit.last_deleted_count != null && (
               <span>최근 삭제 <b>{data.provider_audit.last_deleted_count}건</b></span>
+            )}
+            <span>데이터 수명주기 <b>{data.data_lifecycle.status}</b></span>
+            {data.data_lifecycle.last_deleted_counts && (
+              <span>
+                최근 운영 데이터 정리{" "}
+                <b>
+                  {Object.values(data.data_lifecycle.last_deleted_counts).reduce(
+                    (total, count) => total + count,
+                    0,
+                  )}건
+                </b>
+              </span>
             )}
           </footer>
         </>

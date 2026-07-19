@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     provider_audit_cleanup_enabled: bool = False
     provider_audit_retention_days: int = Field(default=90, ge=7, le=3650)
     provider_audit_cleanup_hour_kst: int = Field(default=4, ge=0, le=23)
+    data_lifecycle_cleanup_enabled: bool = False
+    data_lifecycle_cleanup_hour_kst: int = Field(default=4, ge=0, le=23)
+    data_quality_retention_days: int = Field(default=180, ge=30, le=3650)
+    news_retention_days: int = Field(default=730, ge=30, le=3650)
+    disclosure_retention_days: int = Field(default=3650, ge=365, le=7300)
     persistence_enabled: bool = False
     admin_api_key: SecretStr | None = None
     admin_max_failed_attempts: int = Field(default=5, ge=3, le=20)
@@ -91,6 +96,8 @@ class Settings(BaseSettings):
             raise ValueError("PARTITION_MAINTENANCE_ENABLED requires PERSISTENCE_ENABLED=true")
         if self.provider_audit_cleanup_enabled and not self.persistence_enabled:
             raise ValueError("PROVIDER_AUDIT_CLEANUP_ENABLED requires PERSISTENCE_ENABLED=true")
+        if self.data_lifecycle_cleanup_enabled and not self.persistence_enabled:
+            raise ValueError("DATA_LIFECYCLE_CLEANUP_ENABLED requires PERSISTENCE_ENABLED=true")
         if self.reference_alerts_enabled and not self.persistence_enabled:
             raise ValueError("REFERENCE_ALERTS_ENABLED requires PERSISTENCE_ENABLED=true")
         origins = self.allowed_origins
@@ -140,6 +147,14 @@ class Settings(BaseSettings):
                 if symbol.strip()
             )
         )
+
+    @property
+    def data_retention_days(self) -> dict[str, int]:
+        return {
+            "data_quality_logs": self.data_quality_retention_days,
+            "news": self.news_retention_days,
+            "disclosures": self.disclosure_retention_days,
+        }
 
 
 @lru_cache

@@ -65,7 +65,10 @@ class StockCandleModel(Base):
 
 class DataQualityLogModel(Base):
     __tablename__ = "data_quality_logs"
-    __table_args__ = (Index("ix_quality_logs_symbol_created", "symbol", "created_at"),)
+    __table_args__ = (
+        Index("ix_quality_logs_symbol_created", "symbol", "created_at"),
+        Index("ix_data_quality_logs_created_at", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True

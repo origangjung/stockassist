@@ -58,11 +58,13 @@ from app.services.provider_audit import (
     ProviderAuditMaintenanceService,
 )
 from app.services.ingestion import CandleIngestionService, IngestionOperationsService
+from app.services.data_lifecycle import DataLifecycleMaintenanceService
 from app.alerts import SqlAlchemyAlertRepository
 from app.realtime import build_realtime_quote_hub
 from app.score import ScoreEngine, TechnicalScoreCalculator
 from app.repositories.backtest import SqlAlchemyBacktestRepository
 from app.repositories.provider_audit import SqlAlchemyProviderAuditRepository
+from app.repositories.data_lifecycle import SqlAlchemyDataLifecycleRepository
 from app.repositories.score import SqlAlchemyScoreWeightRepository
 from app.repositories.sqlalchemy import (
     SqlAlchemyDisclosureRepository,
@@ -90,6 +92,15 @@ provider_audit_maintenance_service = ProviderAuditMaintenanceService(
     enabled=settings.provider_audit_cleanup_enabled,
     retention_days=settings.provider_audit_retention_days,
     cleanup_hour_kst=settings.provider_audit_cleanup_hour_kst,
+)
+data_lifecycle_repository = (
+    SqlAlchemyDataLifecycleRepository(sessions) if sessions is not None else None
+)
+data_lifecycle_maintenance_service = DataLifecycleMaintenanceService(
+    data_lifecycle_repository,
+    enabled=settings.data_lifecycle_cleanup_enabled,
+    retention_days=settings.data_retention_days,
+    cleanup_hour_kst=settings.data_lifecycle_cleanup_hour_kst,
 )
 providers = build_providers(settings, audit_sink=provider_audit_repository)
 broker_adapter = BrokerAdapter(providers)
@@ -167,6 +178,7 @@ operations_status_service = OperationsStatusService(
     health_service,
     partition_maintenance_service,
     provider_audit_maintenance_service,
+    data_lifecycle_maintenance_service,
 )
 data_quality_history_service = DataQualityHistoryService(quality_log_repository)
 provider_audit_history_service = ProviderAuditHistoryService(provider_audit_repository)
@@ -200,6 +212,7 @@ async def lifespan(_: FastAPI):
             or settings.reference_alerts_enabled
             or settings.partition_maintenance_enabled
             or settings.provider_audit_cleanup_enabled
+            or settings.data_lifecycle_cleanup_enabled
         ):
             from app.scheduler import build_scheduler
 
@@ -209,6 +222,7 @@ async def lifespan(_: FastAPI):
                 ingestion_service=ingestion_service,
                 partition_service=partition_maintenance_service,
                 provider_audit_service=provider_audit_maintenance_service,
+                data_lifecycle_service=data_lifecycle_maintenance_service,
             )
             scheduler.start()
         yield

@@ -36,3 +36,6 @@ infrastructure/monitoring/secrets/*
 !infrastructure/monitoring/secrets/.gitkeep
 postgres-data/
 redis-data/
+backups/
+*.dump
+*.backup

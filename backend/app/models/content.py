@@ -8,7 +8,10 @@ from app.database.base import Base
 
 class DisclosureModel(Base):
     __tablename__ = "disclosures"
-    __table_args__ = (Index("ix_disclosures_symbol_filed_at", "symbol", "filed_at"),)
+    __table_args__ = (
+        Index("ix_disclosures_symbol_filed_at", "symbol", "filed_at"),
+        Index("ix_disclosures_created_at", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -28,7 +31,10 @@ class DisclosureModel(Base):
 
 class NewsArticleModel(Base):
     __tablename__ = "news"
-    __table_args__ = (Index("ix_news_symbol_published_at", "symbol", "published_at"),)
+    __table_args__ = (
+        Index("ix_news_symbol_published_at", "symbol", "published_at"),
+        Index("ix_news_created_at", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(String(16), nullable=False)

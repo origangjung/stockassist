@@ -29,6 +29,13 @@ const ProviderAuditHistoryPanel = dynamic(
     import("./provider-audit-history").then((module) => module.ProviderAuditHistoryPanel),
   { loading },
 );
+const DataLifecycleMaintenancePanel = dynamic(
+  () =>
+    import("./data-lifecycle-maintenance").then(
+      (module) => module.DataLifecycleMaintenancePanel,
+    ),
+  { loading },
+);
 const EngineComparisonPanel = dynamic(
   () => import("./engine-comparison").then((module) => module.EngineComparisonPanel),
   { loading },
@@ -106,6 +113,7 @@ export function AdminWorkspace() {
             <IngestionControlPanel />
             <DataQualityHistoryPanel />
             <ProviderAuditHistoryPanel />
+            <DataLifecycleMaintenancePanel />
           </>
         )}
         {activeTab === "research" && (
