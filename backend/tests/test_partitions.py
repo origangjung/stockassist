@@ -7,6 +7,7 @@ from app.config import Settings
 from app.database import create_session_factory
 from app.database.partitions import (
     CandlePartitionMaintenanceService,
+    plan_archive_candidates,
     plan_future_partitions,
 )
 from app.providers.mock import MockProvider
@@ -39,6 +40,34 @@ def test_partition_maintenance_is_an_explicit_noop_on_sqlite(tmp_path):
     ]
     assert status["dialect"] == "sqlite"
     assert status["items"] == []
+    assert status["archive_plan"]["status"] == "unsupported"
+    assert status["archive_plan"]["automatic_action"] is False
+
+
+def test_archive_plan_only_selects_complete_monthly_partitions_before_cutoff():
+    cutoff, candidates = plan_archive_candidates(
+        [
+            "stock_candles_2016_05",
+            "stock_candles_2016_06",
+            "stock_candles_2016_07",
+            "stock_candles_default",
+            "stock_candles_2016_99",
+        ],
+        date(2026, 7, 19),
+        archive_after_months=120,
+    )
+
+    assert cutoff == date(2016, 7, 1)
+    assert [item.name for item in candidates] == [
+        "stock_candles_2016_05",
+        "stock_candles_2016_06",
+    ]
+    assert candidates[-1].ends_at == cutoff
+
+
+def test_partition_archive_policy_is_bounded():
+    with pytest.raises(ValueError, match="partition_archive_after_months"):
+        Settings(_env_file=None, partition_archive_after_months=11)
 
 
 def test_partition_scheduler_runs_immediately_then_monthly(tmp_path):

@@ -123,7 +123,11 @@ portfolio_repository = SqlAlchemyPortfolioRepository(sessions) if sessions is no
 alert_repository = SqlAlchemyAlertRepository(sessions) if sessions is not None else None
 quality_log_repository = SqlAlchemyQualityLogRepository(sessions) if sessions is not None else None
 partition_maintenance_service = (
-    CandlePartitionMaintenanceService(sessions, settings.partition_lookahead_months)
+    CandlePartitionMaintenanceService(
+        sessions,
+        settings.partition_lookahead_months,
+        settings.partition_archive_after_months,
+    )
     if sessions is not None
     else None
 )

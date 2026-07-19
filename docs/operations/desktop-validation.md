@@ -13,6 +13,8 @@ kept off the space-constrained laptop.
 - [ ] `docker compose exec api alembic heads` reports `20260719_0017`
 - [ ] Confirm the three `created_at` lifecycle indexes exist in PostgreSQL
 - [ ] Open the admin Operations tab and verify lifecycle preview counts load
+- [ ] Verify the candle archive preview lists only complete monthly partitions older than the cutoff
+- [ ] Confirm candle archive preview reports `automatic_action=false`; do not detach or drop data
 - [ ] Keep automatic lifecycle cleanup disabled until the preview and policy are approved
 - [ ] Perform the isolated backup/restore rehearsal in `postgresql-backup-restore.md`
 - [ ] Run the full backend and TypeScript checks from `DESKTOP_CODEX_HANDOFF.md`

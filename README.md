@@ -39,6 +39,10 @@ Docker PostgreSQL 구성은 `PARTITION_MAINTENANCE_ENABLED=true`를 기본으로
 3개월의 `stock_candles` 월별 파티션을 서버 시작 시점과 매월 20일에 미리 생성한다. 로컬
 SQLite에서는 이 작업을 실행하지 않는다.
 
+관리자 운영 화면은 `PARTITION_ARCHIVE_AFTER_MONTHS`(기본 120개월)보다 오래된 완결 월
+파티션을 아카이브 검토 대상으로 표시한다. 이는 비파괴 미리보기이며 자동 이동·분리·삭제를
+수행하지 않는다. 실제 작업 전에는 [캔들 파티션 아카이브 정책](docs/architecture/candle-partition-archive.md)을 따른다.
+
 `PERSISTENCE_ENABLED=true`이면 백테스트 결과와 활성 Score 가중치를 DB에 연결한다. 이 옵션을 켜기 전에 `alembic upgrade head`를 실행해야 한다. Docker Compose에서는 마이그레이션 후 자동으로 활성화된다.
 
 관리자 화면 `/admin`에서는 백테스트 이력, 데이터 품질 로그, 캔들 수집, 관심 종목,

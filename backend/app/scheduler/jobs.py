@@ -59,6 +59,7 @@ def build_scheduler(
         partitions = partition_service or CandlePartitionMaintenanceService(
             sessions,
             settings.partition_lookahead_months,
+            settings.partition_archive_after_months,
         )
         scheduler.add_job(
             partitions.ensure_future,

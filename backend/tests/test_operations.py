@@ -49,6 +49,8 @@ def test_operations_status_reports_safe_runtime_configuration_without_secrets():
     assert result["provider_audit"]["status"] == "disabled"
     assert result["features"]["data_lifecycle_cleanup"] is False
     assert result["data_lifecycle"]["status"] == "disabled"
+    assert result["partitions"]["archive_plan"]["automatic_action"] is False
+    assert result["partitions"]["archive_plan"]["candidates"] == []
     serialized = str(result)
     assert "never-expose-toss-secret" not in serialized
     assert "never-expose-openai-secret" not in serialized

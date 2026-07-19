@@ -6,11 +6,15 @@
 
 ## 2026-07-19 최신 인계 상태
 
-노트북에서 Phase 16 운영 데이터 수명주기 기능을 구현했다. 데이터 품질 로그, 뉴스,
-공시만 고정 허용목록으로 정리하며 관리자 미리보기, 수동 실행, 일일 스케줄러, 운영 상태,
-관리자 UI와 `created_at` 인덱스 마이그레이션(`20260719_0017`)이 포함된다. 캔들, 거래,
-백테스트, 예측, AI 리포트, 모델, 포트폴리오, 보유 종목, Provider 감사 로그는 이 작업의
-자동 삭제 대상이 아니다.
+노트북에서 Phase 16 운영 데이터 수명주기와 캔들 파티션 아카이브 미리보기를 구현했다.
+데이터 품질 로그, 뉴스, 공시만 고정 허용목록으로 정리하며 관리자 미리보기, 수동 실행,
+일일 스케줄러, 운영 상태, 관리자 UI와 `created_at` 인덱스 마이그레이션
+(`20260719_0017`)이 포함된다. 캔들, 거래, 백테스트, 예측, AI 리포트, 모델, 포트폴리오,
+보유 종목, Provider 감사 로그는 이 작업의 자동 삭제 대상이 아니다.
+
+오래된 `stock_candles_YYYY_MM` 파티션은 기본 120개월 hot-storage 기준으로 검토 후보만
+표시한다. default·비정상 이름·최근 파티션은 제외하며 `automatic_action=false`라서 이동,
+분리, 삭제를 실행하지 않는다.
 
 데스크탑에서는 [검증 체크리스트](docs/operations/desktop-validation.md)와
 [PostgreSQL 백업·복구 절차](docs/operations/postgresql-backup-restore.md)를 따라 Docker
@@ -85,35 +89,37 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 
 ### 가장 최근 완료 작업
 
-- Toss 호출의 성공·실패 외부 `requestId`와 내부 요청 ID 감사 저장
-- 상태 코드, API 그룹, 최종 결과, 재시도 횟수, 소요 시간 저장
-- 토큰, 계좌번호, 쿼리·요청/응답 본문은 감사 이력에서 제외
-- 관리자 전용 `GET /api/v1/admin/provider-audits` 추가
-- 관리자 BFF `/api/admin/provider-audits` 및 운영 화면 추가
-- Alembic revision `20260716_0016`이 현재 head
-- Provider 감사 로그 기본 90일 보존, 일일 자동 정리, 관리자 수동 정리와 운영 상태 표시
+- 운영 데이터 수명주기 허용목록과 미리보기·정리 서비스
+- 관리자 화면의 데이터 품질 로그·뉴스·공시 만료 건수 확인
+- 캔들·백테스트·AI·계좌 데이터 자동 삭제 제외
+- 오래된 캔들 월 파티션 비파괴 아카이브 후보 계획
+- KST 월 경계, 정상 `YYYY_MM` 이름, 완결 파티션 기준 검증
+- `PARTITION_ARCHIVE_AFTER_MONTHS` 기본 120개월, 허용 범위 12~600개월
+- Alembic revision `20260719_0017`이 현재 head
+- PostgreSQL 백업·격리 복구와 데스크탑 검증 체크리스트 문서화
 
 주요 파일:
 
-- `backend/app/providers/toss/client.py`
-- `backend/app/providers/audit.py`
-- `backend/app/models/provider_audit.py`
-- `backend/app/repositories/provider_audit.py`
-- `backend/app/services/provider_audit.py`
-- `backend/alembic/versions/20260716_0016_provider_audit_logs.py`
-- `apps/web/components/provider-audit-history.tsx`
-- `apps/web/app/api/admin/provider-audits/route.ts`
+- `backend/app/services/data_lifecycle.py`
+- `backend/app/repositories/data_lifecycle.py`
+- `backend/app/database/partitions.py`
+- `backend/alembic/versions/20260719_0017_data_lifecycle_indexes.py`
+- `apps/web/components/data-lifecycle-maintenance.tsx`
+- `apps/web/components/operations-status.tsx`
+- `docs/architecture/data-lifecycle.md`
+- `docs/architecture/candle-partition-archive.md`
+- `docs/operations/postgresql-backup-restore.md`
 - `apps/web/lib/admin-api.ts`
 
 ## 4. 현재 검증 상태
 
 마지막으로 확인된 결과:
 
-- 백엔드 전체 테스트: `170 passed`
-- 최근 관리자·감사 집중 테스트: `15 passed`
+- 백엔드 전체 테스트: `179 passed`
+- 최근 파티션·운영 상태 집중 테스트: `8 passed`
 - Ruff 검사: 통과
 - 프론트 TypeScript 검사: 통과
-- Alembic: `20260716_0016 (head)`
+- Alembic: `20260719_0017 (head)`
 - 서버와 Docker Compose: 현재 꺼진 상태
 
 검증 명령:
@@ -153,12 +159,20 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 삭제 대상은 반드시 `provider_audit_logs`로 제한하고 다른 감사·AI 리포트·백테스트
 이력을 함께 삭제하지 않는다.
 
-### 다음 노트북 작업 — 운영 데이터 수명주기
+### 완료 — 운영 데이터 수명주기와 파티션 아카이브 계획
 
-- 뉴스, 공시, 시세 캐시, 데이터 품질 로그의 테이블별 보존 정책
-- PostgreSQL 백업 및 실제 복구 리허설 문서
-- 월 파티션 생성뿐 아니라 오래된 파티션 보관·아카이브 정책
-- 감사 로그와 사용자 분석 이력의 보존 기간 분리
+- 뉴스, 공시, 데이터 품질 로그의 테이블별 보존 정책과 정리 미리보기
+- PostgreSQL 백업 및 격리 복구 리허설 문서
+- 오래된 월 파티션의 비파괴 아카이브 후보 미리보기
+- 감사 로그, 운영 데이터, 사용자 분석 이력의 보존 범위 분리
+- 캔들·백테스트·예측·AI 리포트·포트폴리오 자동 삭제 금지
+
+### 다음 노트북 작업 — 분석 데이터 보정 메타데이터
+
+- 액면분할·배당락 등 기업행동 보정 규칙의 버전·기준시점 스키마 설계
+- raw 캔들을 보존하면서 cleaned 데이터에 적용된 보정 이력 추적
+- 시점 T 이후에 알려진 기업행동을 사용하지 않는 point-in-time 검증
+- 실제 대량 보정·장기 성능 측정은 데스크탑 검증으로 분리
 
 ### 다음 데스크탑 작업 — 실데이터 장시간 검증
 

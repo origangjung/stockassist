@@ -49,6 +49,11 @@ secret-free view of active providers, feature flags and realtime limits. The adm
 refreshes it every 30 seconds. It exposes only provider names and boolean configuration state;
 credentials, URLs and DSNs are never returned.
 
+The operations response includes a non-mutating candle partition archive preview. It reports the
+configured hot-storage window, cutoff month and valid monthly candidates while always returning
+`automatic_action=false`. It never exposes archive paths and cannot detach or drop a partition.
+See [Candle partition archive policy](../architecture/candle-partition-archive.md).
+
 The data-quality endpoint reads persisted pipeline validation logs in reverse chronological order.
 It supports bounded pagination plus optional symbol and `error|warning` filters, and returns counts
 for the active filter. When persistence is disabled it returns an explicit disabled state rather

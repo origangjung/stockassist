@@ -93,6 +93,34 @@ export function OperationsStatusPanel() {
               </div>
             </article>
           </div>
+          <section className="partition-archive-plan">
+            <header>
+              <div>
+                <span>CANDLE PARTITION / ARCHIVE PREVIEW</span>
+                <h2>장기 캔들 파티션 아카이브 계획</h2>
+              </div>
+              <b>{data.partitions.archive_plan.candidates.length}개 검토 대상</b>
+            </header>
+            <p>
+              최근 {data.partitions.archive_plan.archive_after_months}개월은 유지합니다. 기준 월은{" "}
+              {data.partitions.archive_plan.cutoff_month ?? "확인 불가"}이며, 자동 이동·삭제는
+              실행하지 않습니다.
+            </p>
+            {data.partitions.archive_plan.candidates.length > 0 && (
+              <div className="partition-archive-candidates">
+                {data.partitions.archive_plan.candidates.slice(0, 12).map((candidate) => (
+                  <code key={candidate.name}>{candidate.name}</code>
+                ))}
+                {data.partitions.archive_plan.candidates.length > 12 && (
+                  <span>외 {data.partitions.archive_plan.candidates.length - 12}개</span>
+                )}
+              </div>
+            )}
+            <small>
+              상태 {data.partitions.archive_plan.status} · 실제 아카이브는 백업 검증과 운영자
+              승인 후 별도 절차로 수행
+            </small>
+          </section>
           <footer className="operations-realtime">
             <span>실시간 소스 <b>{data.realtime.source}</b></span>
             <span>최대 종목 <b>{data.realtime.max_symbols}</b></span>

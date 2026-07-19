@@ -105,3 +105,13 @@ nav a { margin-left: 14px; color: #9fb0c7; font-size: 12px; text-decoration: non
 .data-lifecycle-grid small + small { margin-top: 4px; }
 .data-lifecycle-disabled { margin: 0 0 12px; color: #899ab0; font-size: 11px; }
 @media (max-width: 680px) { .data-lifecycle-actions { display: grid; } .data-lifecycle-grid { grid-template-columns: 1fr; } }
+.partition-archive-plan { margin-top: 12px; padding: 17px; border: 1px solid #35445a; border-radius: 10px; background: #0a1423; }
+.partition-archive-plan header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.partition-archive-plan header span { color: #72b8ff; font-size: 9px; letter-spacing: 1.1px; }
+.partition-archive-plan h2 { margin: 5px 0 0; font-size: 16px; }
+.partition-archive-plan header > b { border-radius: 999px; padding: 6px 9px; background: #20354c; color: #8bc4ff; font-size: 10px; white-space: nowrap; }
+.partition-archive-plan p { margin: 13px 0; color: #91a2b8; font-size: 11px; line-height: 1.6; }
+.partition-archive-plan > small { display: block; margin-top: 11px; color: #71839b; font-size: 9px; }
+.partition-archive-candidates { display: flex; flex-wrap: wrap; gap: 6px; }
+.partition-archive-candidates code, .partition-archive-candidates span { border: 1px solid #2d4059; border-radius: 6px; padding: 5px 7px; background: #07101e; color: #9bb2cc; font-size: 9px; }
+@media (max-width: 680px) { .partition-archive-plan header { display: grid; } }

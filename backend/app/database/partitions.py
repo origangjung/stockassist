@@ -1,15 +1,26 @@
 from dataclasses import asdict, dataclass
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 import re
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-_PARTITION_NAME = re.compile(r"^stock_candles_[0-9]{4}_[0-9]{2}$")
+_PARTITION_NAME = re.compile(
+    r"^stock_candles_(?P<year>[0-9]{4})_(?P<month>0[1-9]|1[0-2])$"
+)
+_KST = ZoneInfo("Asia/Seoul")
 
 
 @dataclass(frozen=True)
 class PlannedPartition:
+    name: str
+    starts_at: date
+    ends_at: date
+
+
+@dataclass(frozen=True)
+class ArchiveCandidate:
     name: str
     starts_at: date
     ends_at: date
@@ -33,10 +44,35 @@ def plan_future_partitions(reference: date, lookahead_months: int) -> list[Plann
     ]
 
 
+def plan_archive_candidates(
+    partition_names: list[str],
+    reference: date,
+    archive_after_months: int,
+) -> tuple[date, list[ArchiveCandidate]]:
+    """Classify complete monthly partitions without moving or deleting them."""
+    cutoff_month = _shift_month(reference.replace(day=1), -archive_after_months)
+    candidates: list[ArchiveCandidate] = []
+    for name in partition_names:
+        match = _PARTITION_NAME.fullmatch(name)
+        if match is None:
+            continue
+        starts_at = date(int(match.group("year")), int(match.group("month")), 1)
+        ends_at = _shift_month(starts_at, 1)
+        if ends_at <= cutoff_month:
+            candidates.append(ArchiveCandidate(name, starts_at, ends_at))
+    return cutoff_month, sorted(candidates, key=lambda item: item.starts_at)
+
+
 class CandlePartitionMaintenanceService:
-    def __init__(self, sessions: sessionmaker[Session], lookahead_months: int) -> None:
+    def __init__(
+        self,
+        sessions: sessionmaker[Session],
+        lookahead_months: int,
+        archive_after_months: int = 120,
+    ) -> None:
         self._sessions = sessions
         self._lookahead_months = lookahead_months
+        self._archive_after_months = archive_after_months
 
     @property
     def supported(self) -> bool:
@@ -45,7 +81,7 @@ class CandlePartitionMaintenanceService:
 
     def ensure_future(self, reference: date | None = None) -> dict[str, object]:
         planned = plan_future_partitions(
-            reference or datetime.now(UTC).date(),
+            reference or datetime.now(_KST).date(),
             self._lookahead_months,
         )
         if not self.supported:
@@ -81,6 +117,7 @@ class CandlePartitionMaintenanceService:
                 "dialect": self._sessions.kw["bind"].dialect.name,
                 "items": [],
                 "lookahead_months": self._lookahead_months,
+                "archive_plan": self._archive_plan([], datetime.now(_KST).date(), "unsupported"),
             }
         with self._sessions() as session:
             rows = session.execute(
@@ -100,4 +137,28 @@ class CandlePartitionMaintenanceService:
             "dialect": "postgresql",
             "items": items,
             "lookahead_months": self._lookahead_months,
+            "archive_plan": self._archive_plan(
+                [item["name"] for item in items],
+                datetime.now(_KST).date(),
+                "preview_only",
+            ),
+        }
+
+    def _archive_plan(
+        self,
+        partition_names: list[str],
+        reference: date,
+        status: str,
+    ) -> dict[str, object]:
+        cutoff, candidates = plan_archive_candidates(
+            partition_names,
+            reference,
+            self._archive_after_months,
+        )
+        return {
+            "status": status,
+            "archive_after_months": self._archive_after_months,
+            "cutoff_month": cutoff,
+            "candidates": [asdict(item) for item in candidates],
+            "automatic_action": False,
         }

@@ -25,3 +25,8 @@ alembic upgrade head
 데이터 품질 로그, 뉴스, 공시의 `created_at` 정리 작업을 위한 인덱스를 추가한다. 백업 및
 격리 복구 절차는 [PostgreSQL backup and restore](../operations/postgresql-backup-restore.md)를
 따른다.
+
+장기 캔들은 자동 삭제하지 않는다. 관리자 운영 상태는
+`PARTITION_ARCHIVE_AFTER_MONTHS`보다 오래된 완결 월 파티션을 검토 후보로만 표시하며,
+실제 이동·분리·삭제 절차와 안전 조건은
+[Candle partition archive policy](candle-partition-archive.md)에 정의한다.

@@ -35,6 +35,13 @@ class OperationsStatusService:
                 "status": "disabled",
                 "items": [],
                 "lookahead_months": settings.partition_lookahead_months,
+                "archive_plan": {
+                    "status": "disabled",
+                    "archive_after_months": settings.partition_archive_after_months,
+                    "cutoff_month": None,
+                    "candidates": [],
+                    "automatic_action": False,
+                },
             }
         )
         return {

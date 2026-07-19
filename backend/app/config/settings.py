@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     scheduler_ingestion_limit: int = Field(default=120, ge=30, le=365)
     partition_maintenance_enabled: bool = False
     partition_lookahead_months: int = Field(default=3, ge=1, le=12)
+    partition_archive_after_months: int = Field(default=120, ge=12, le=600)
     provider_audit_cleanup_enabled: bool = False
     provider_audit_retention_days: int = Field(default=90, ge=7, le=3650)
     provider_audit_cleanup_hour_kst: int = Field(default=4, ge=0, le=23)

@@ -359,6 +359,17 @@ export interface OperationsStatus {
     dialect?: string;
     items: Array<{ name: string; bounds: string }>;
     lookahead_months: number;
+    archive_plan: {
+      status: "preview_only" | "disabled" | "unsupported";
+      archive_after_months: number;
+      cutoff_month: string | null;
+      candidates: Array<{
+        name: string;
+        starts_at: string;
+        ends_at: string;
+      }>;
+      automatic_action: false;
+    };
   };
   provider_audit: ProviderAuditMaintenanceStatus;
   data_lifecycle: DataLifecycleStatus;
