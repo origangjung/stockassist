@@ -16,6 +16,8 @@ collected.
 The repository contains a fixed model-and-column allowlist. It does not accept table or column
 names from HTTP input. Candles, trades, backtest runs/results/events, predictions, AI reports,
 model versions, portfolios, holdings and provider audit logs are outside this cleanup boundary.
+Corporate-action revision history is also excluded because it is required for point-in-time
+reconstruction.
 Provider audit logs retain their separate policy and scheduler job.
 
 ## Safe operation

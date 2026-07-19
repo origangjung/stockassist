@@ -53,6 +53,9 @@ class StockCandleModel(Base):
     interval: Mapped[str] = mapped_column(String(8), nullable=False, default="1d")
     data_stage: Mapped[str] = mapped_column(String(12), nullable=False)
     aggregation_version: Mapped[str] = mapped_column(String(24), nullable=False, default="raw")
+    price_basis: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="unknown", server_default="unknown"
+    )
     open: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     high: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     low: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)

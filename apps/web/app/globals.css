@@ -115,3 +115,13 @@ nav a { margin-left: 14px; color: #9fb0c7; font-size: 12px; text-decoration: non
 .partition-archive-candidates { display: flex; flex-wrap: wrap; gap: 6px; }
 .partition-archive-candidates code, .partition-archive-candidates span { border: 1px solid #2d4059; border-radius: 6px; padding: 5px 7px; background: #07101e; color: #9bb2cc; font-size: 9px; }
 @media (max-width: 680px) { .partition-archive-plan header { display: grid; } }
+.corporate-action-admin { border-top: 1px solid #213047; }
+.corporate-action-safety { margin: -12px 0 18px; padding: 12px 14px; border-left: 3px solid #72b8ff; background: #0b1829; color: #8fa2ba; font-size: 11px; line-height: 1.6; }
+.corporate-action-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.corporate-action-meta span { border: 1px solid #2c4059; border-radius: 7px; padding: 8px 10px; background: #081321; color: #8193aa; font-size: 10px; }
+.corporate-action-meta b { margin-left: 4px; color: #dce7f5; }
+.corporate-action-table code, .corporate-action-table small { display: block; margin-top: 4px; color: #7489a5; font-size: 9px; }
+.corporate-action-status { display: inline-block; border-radius: 5px; padding: 4px 7px; background: #493b19; color: #f3cb66; font-size: 9px; }
+.corporate-action-status.confirmed { background: #173d34; color: #67d8aa; }
+.corporate-action-status.cancelled { background: #46262d; color: #ff8c9d; }
+@media (max-width: 680px) { .corporate-action-admin .admin-heading form { display: grid; grid-template-columns: 1fr; width: 100%; } }

@@ -30,3 +30,8 @@ alembic upgrade head
 `PARTITION_ARCHIVE_AFTER_MONTHS`보다 오래된 완결 월 파티션을 검토 후보로만 표시하며,
 실제 이동·분리·삭제 절차와 안전 조건은
 [Candle partition archive policy](candle-partition-archive.md)에 정의한다.
+
+`20260719_0018`은 기업행동의 불변 revision을 저장하는 `corporate_actions` 테이블과
+`stock_candles.price_basis`를 추가한다. raw/cleaned 캔들을 덮어쓰지 않는 보정 원칙과
+기준시점 재현 규칙은
+[Point-in-time corporate action adjustments](corporate-action-adjustments.md)에 정의한다.

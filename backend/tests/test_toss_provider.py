@@ -176,6 +176,7 @@ def test_candle_pagination_and_market_data_shapes_are_mapped():
         provider.close()
 
     assert len(candles) == 2
+    assert all(candle.price_basis == "provider_adjusted" for candle in candles)
     assert candle_calls == [None, "2026-07-12T00:00:00+09:00"]
     assert asks[0].price == Decimal("72200") and bids[0].quantity == 200
     assert trades[0].side is None and trades[0].quantity == 3

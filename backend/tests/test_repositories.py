@@ -40,6 +40,7 @@ def test_sqlalchemy_repositories_upsert_and_read(tmp_path):
     stored = candles.find("005930", interval="1d", stage="raw", limit=10)
     assert len(stored) == 3
     assert stored[-1].close == source[-1].close
+    assert stored[-1].price_basis == "unadjusted"
 
     result = BacktestEngine().run(
         source, BuyAndHoldStrategy(), BacktestConfig(costs=CostModel(0, 0, 0))

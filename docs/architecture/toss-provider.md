@@ -6,6 +6,8 @@
 
 - OAuth 2.0 Client Credentials 토큰 발급과 캐시
 - 현재가, 1일봉, 호가, 체결, 종목 정보, 투자유의 조회
+- 1일봉은 Toss 요청의 `adjusted=true` 결과이므로 `price_basis=provider_adjusted`로 표시한다.
+  StockPilot 기업행동 엔진은 이 값을 다시 보정하지 않아 이중 보정을 차단한다.
 - API 그룹별 토큰 버킷과 응답 헤더 기반 동적 한도 반영
 - 429 `Retry-After` + 지수 백오프 + jitter
 - `expired-token` 1회 자동 재발급

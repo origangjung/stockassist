@@ -16,6 +16,11 @@
 표시한다. default·비정상 이름·최근 파티션은 제외하며 `automatic_action=false`라서 이동,
 분리, 삭제를 실행하지 않는다.
 
+기업행동 revision과 캔들 `price_basis` 메타데이터도 추가했다. Mock은 `unadjusted`, Toss
+조정 캔들은 `provider_adjusted`, 보정 엔진 출력은 `point_in_time_adjusted`로 구분한다.
+엔진은 기준시점 이후에 알려진 revision을 사용하지 않고 provider-adjusted·legacy unknown
+캔들을 거부해 Look-ahead와 이중 보정을 차단한다. raw/cleaned DB 행은 수정하지 않는다.
+
 데스크탑에서는 [검증 체크리스트](docs/operations/desktop-validation.md)와
 [PostgreSQL 백업·복구 절차](docs/operations/postgresql-backup-restore.md)를 따라 Docker
 재빌드와 격리 복구 리허설만 수행한다. 실제 정리 전 관리자 화면의 미리보기 결과와 조직의
@@ -89,37 +94,35 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 
 ### 가장 최근 완료 작업
 
-- 운영 데이터 수명주기 허용목록과 미리보기·정리 서비스
-- 관리자 화면의 데이터 품질 로그·뉴스·공시 만료 건수 확인
-- 캔들·백테스트·AI·계좌 데이터 자동 삭제 제외
-- 오래된 캔들 월 파티션 비파괴 아카이브 후보 계획
-- KST 월 경계, 정상 `YYYY_MM` 이름, 완결 파티션 기준 검증
-- `PARTITION_ARCHIVE_AFTER_MONTHS` 기본 120개월, 허용 범위 12~600개월
-- Alembic revision `20260719_0017`이 현재 head
-- PostgreSQL 백업·격리 복구와 데스크탑 검증 체크리스트 문서화
+- 기업행동 source/event/revision 불변 이력과 `known_at` 기준시점 저장
+- 분할·병합·현금/주식배당·유상증자 가격/거래량 계수 모델
+- confirmed·cancelled 정정 이력을 재현하는 point-in-time 보정 엔진
+- `stock_candles.price_basis` provenance와 혼합 기준 정제 차단
+- Toss `adjusted=true` 캔들의 이중 보정 차단
+- 관리자 전용 기업행동 조회 API, BFF와 읽기 전용 이력 화면
+- Alembic revision `20260719_0018`이 현재 head
+- 기업행동 이력을 운영 데이터 자동 정리 대상에서 제외
 
 주요 파일:
 
-- `backend/app/services/data_lifecycle.py`
-- `backend/app/repositories/data_lifecycle.py`
-- `backend/app/database/partitions.py`
-- `backend/alembic/versions/20260719_0017_data_lifecycle_indexes.py`
-- `apps/web/components/data-lifecycle-maintenance.tsx`
-- `apps/web/components/operations-status.tsx`
-- `docs/architecture/data-lifecycle.md`
-- `docs/architecture/candle-partition-archive.md`
-- `docs/operations/postgresql-backup-restore.md`
+- `backend/app/corporate_actions/engine.py`
+- `backend/app/models/corporate_action.py`
+- `backend/app/repositories/corporate_action.py`
+- `backend/app/services/corporate_actions.py`
+- `backend/alembic/versions/20260719_0018_corporate_actions.py`
+- `apps/web/components/corporate-action-history.tsx`
+- `docs/architecture/corporate-action-adjustments.md`
 - `apps/web/lib/admin-api.ts`
 
 ## 4. 현재 검증 상태
 
 마지막으로 확인된 결과:
 
-- 백엔드 전체 테스트: `179 passed`
-- 최근 파티션·운영 상태 집중 테스트: `8 passed`
+- 백엔드 전체 테스트: `188 passed`
+- 최근 기업행동·캔들·Toss 집중 테스트: `50 passed`
 - Ruff 검사: 통과
 - 프론트 TypeScript 검사: 통과
-- Alembic: `20260719_0017 (head)`
+- Alembic: `20260719_0018 (head)`
 - 서버와 Docker Compose: 현재 꺼진 상태
 
 검증 명령:
@@ -167,12 +170,20 @@ StockPilot AI는 국내·미국 주식의 시장 데이터, 기술·재무·뉴�
 - 감사 로그, 운영 데이터, 사용자 분석 이력의 보존 범위 분리
 - 캔들·백테스트·예측·AI 리포트·포트폴리오 자동 삭제 금지
 
-### 다음 노트북 작업 — 분석 데이터 보정 메타데이터
+### 완료 — 분석 데이터 보정 메타데이터
 
-- 액면분할·배당락 등 기업행동 보정 규칙의 버전·기준시점 스키마 설계
-- raw 캔들을 보존하면서 cleaned 데이터에 적용된 보정 이력 추적
-- 시점 T 이후에 알려진 기업행동을 사용하지 않는 point-in-time 검증
-- 실제 대량 보정·장기 성능 측정은 데스크탑 검증으로 분리
+- 액면분할·배당락 등 기업행동 보정 규칙의 revision·기준시점 스키마
+- raw/cleaned 캔들을 보존하는 별도 point-in-time 보정 뷰
+- 시점 T 이후에 알려진 정정·취소를 사용하지 않는 검증
+- 공급자 조정 캔들과 legacy unknown 데이터의 이중 보정 차단
+
+### 다음 노트북 작업 — 기업행동 수집과 소비자 opt-in 설계
+
+- 신뢰 가능한 국내·미국 기업행동 source와 Provider 계약 정의
+- source event를 불변 revision으로 적재하는 idempotent 수집 서비스
+- 기존 캔들의 `unknown` price basis를 검증·분류하는 운영 절차
+- 신뢰 검증 전에는 Indicator·Score·ML·Backtest에 자동 보정을 연결하지 않음
+- 실제 대량 backfill과 장기 성능 측정은 데스크탑 검증으로 분리
 
 ### 다음 데스크탑 작업 — 실데이터 장시간 검증
 

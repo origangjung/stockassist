@@ -83,6 +83,15 @@ def validate_candles(candles: list[Candle]) -> list[DataQualityLog]:
     logs: list[DataQualityLog] = []
     timestamps: set[datetime] = set()
     previous: datetime | None = None
+    price_bases = {candle.price_basis for candle in candles}
+    if len(price_bases) > 1:
+        logs.append(
+            DataQualityLog(
+                "mixed_price_basis",
+                QualitySeverity.ERROR,
+                "서로 다른 가격 보정 기준의 캔들을 함께 처리할 수 없습니다.",
+            )
+        )
     for candle in candles:
         if candle.timestamp in timestamps:
             logs.append(
@@ -146,6 +155,9 @@ def clean_candles(candles: list[Candle]) -> list[Candle]:
 def aggregate_candles(candles: list[Candle], interval: CandleInterval) -> list[Candle]:
     if interval == CandleInterval.DAY:
         return candles
+    price_bases = {candle.price_basis for candle in candles}
+    if len(price_bases) > 1:
+        raise ValueError("Cannot aggregate candles with mixed price bases")
     groups: dict[tuple[int, int], list[Candle]] = defaultdict(list)
     for candle in candles:
         if interval == CandleInterval.WEEK:
@@ -166,6 +178,7 @@ def aggregate_candles(candles: list[Candle], interval: CandleInterval) -> list[C
                 low=min(value.low for value in ordered),
                 close=ordered[-1].close,
                 volume=sum(value.volume for value in ordered),
+                price_basis=ordered[0].price_basis,
             )
         )
     return aggregated
@@ -176,5 +189,9 @@ class CandlePipeline:
         self, raw_candles: list[Candle], interval: CandleInterval = CandleInterval.DAY
     ) -> PipelineResult:
         logs = validate_candles(raw_candles)
-        cleaned = clean_candles(raw_candles)
+        cleaned = (
+            []
+            if any(log.rule == "mixed_price_basis" for log in logs)
+            else clean_candles(raw_candles)
+        )
         return PipelineResult(len(raw_candles), aggregate_candles(cleaned, interval), logs)

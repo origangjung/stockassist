@@ -24,6 +24,13 @@ const DataQualityHistoryPanel = dynamic(
   () => import("./data-quality-history").then((module) => module.DataQualityHistoryPanel),
   { loading },
 );
+const CorporateActionHistoryPanel = dynamic(
+  () =>
+    import("./corporate-action-history").then(
+      (module) => module.CorporateActionHistoryPanel,
+    ),
+  { loading },
+);
 const ProviderAuditHistoryPanel = dynamic(
   () =>
     import("./provider-audit-history").then((module) => module.ProviderAuditHistoryPanel),
@@ -112,6 +119,7 @@ export function AdminWorkspace() {
             <OperationsStatusPanel />
             <IngestionControlPanel />
             <DataQualityHistoryPanel />
+            <CorporateActionHistoryPanel />
             <ProviderAuditHistoryPanel />
             <DataLifecycleMaintenancePanel />
           </>

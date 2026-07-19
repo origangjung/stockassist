@@ -138,6 +138,7 @@ class MockProvider(StockProvider):
                     low.quantize(quantum),
                     close,
                     rng.randint(500_000, 15_000_000),
+                    "unadjusted",
                 )
             )
             base = close

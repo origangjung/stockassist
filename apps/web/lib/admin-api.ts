@@ -448,6 +448,34 @@ export interface DataLifecyclePreview extends DataLifecycleStatus {
   preview_error_type?: string | null;
 }
 
+export interface CorporateActionItem {
+  symbol: string;
+  action_type: "split" | "reverse_split" | "cash_dividend" | "stock_dividend" | "rights_issue";
+  event_id: string;
+  revision: number;
+  effective_at: string;
+  announced_at: string | null;
+  known_at: string;
+  price_factor: number | string;
+  volume_factor: number | string;
+  status: "announced" | "confirmed" | "cancelled";
+  source: string;
+  rule_version: string;
+  recorded_at: string | null;
+}
+
+export interface CorporateActionHistory {
+  persistence_status: "enabled" | "disabled";
+  items: CorporateActionItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  data_as_of: string;
+  adjustment_version: string;
+  application_mode: "preview_only";
+  raw_candles_mutated: false;
+}
+
 export interface IngestionStatus {
   scheduler_enabled: boolean;
   persistence_enabled: boolean;
@@ -608,6 +636,16 @@ export function fetchDataQualityHistory(
   if (symbol) params.set("symbol", symbol);
   if (severity) params.set("severity", severity);
   return request<DataQualityHistory>(`/api/admin/data-quality?${params}`);
+}
+
+export function fetchCorporateActionHistory(
+  symbol: string,
+  limit: number,
+  offset: number,
+): Promise<CorporateActionHistory> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (symbol) params.set("symbol", symbol);
+  return request<CorporateActionHistory>(`/api/admin/corporate-actions?${params}`);
 }
 
 export function fetchProviderAuditHistory(

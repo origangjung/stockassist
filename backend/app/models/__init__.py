@@ -9,6 +9,7 @@ from app.models.ai_report import AIReportModel
 from app.models.portfolio import BrokerAccountModel, HoldingModel
 from app.models.alerts import PriceAlertModel, WatchlistModel
 from app.models.provider_audit import ProviderAuditLogModel
+from app.models.corporate_action import CorporateActionModel
 
 __all__ = [
     "StockModel",
@@ -30,4 +31,5 @@ __all__ = [
     "PriceAlertModel",
     "WatchlistModel",
     "ProviderAuditLogModel",
+    "CorporateActionModel",
 ]

@@ -53,6 +53,11 @@ DB에 저장하며 주문이나 계좌 변경을 실행하지 않는다. `ADMIN_
 `REFERENCE_ALERTS_ENABLED=true`로 켜며 DB 저장이 필수다. 참고 알림은 조건 도달만 기록하고
 주문은 실행하지 않는다. 자세한 내용은 [참고 알림 설계](docs/architecture/reference-alerts.md)를 확인한다.
 
+기업행동 이력 화면은 액면분할·배당락 등의 revision, 효력일과 알려진 시각을 읽기 전용으로
+표시한다. 보정 엔진은 명시적인 `unadjusted` 캔들에만 point-in-time 뷰를 만들며 raw/cleaned
+행을 수정하지 않는다. 자세한 기준은
+[기업행동 보정 설계](docs/architecture/corporate-action-adjustments.md)를 확인한다.
+
 `ACCOUNT_SYNC_ENABLED=true`이면 `/admin`에서 마스킹된 본인 계좌를 수동 동기화하고 통화별 포트폴리오 집중도와 손실 노출을 확인할 수 있다. 계좌 API는 관리자 키로 보호되며 주문 기능은 없다.
 
 ## 현재 범위

@@ -29,6 +29,7 @@ Sensitive responses are marked `Cache-Control: no-store, private`.
 - `POST /api/v1/admin/provider-audits/cleanup`
 - `GET /api/v1/admin/data-lifecycle/preview`
 - `POST /api/v1/admin/data-lifecycle/cleanup`
+- `GET /api/v1/admin/corporate-actions?symbol=005930&as_of=2026-01-12T00:00:00Z`
 - `GET /api/v1/admin/backtests?limit=25&offset=0&symbol=005930`
 - `GET /api/v1/admin/backtests/{run_id}`
 - `GET /api/v1/admin/models?symbol=005930&algorithm=xgboost&horizon_days=5`
@@ -79,6 +80,12 @@ and `disclosures`. Preview returns eligible counts and storage-time cutoffs with
 Cleanup is disabled unless `DATA_LIFECYCLE_CLEANUP_ENABLED=true`, and all deletes commit or roll
 back together. Research, account, AI and market-history tables are not part of this endpoint. See
 [Operational data lifecycle](../architecture/data-lifecycle.md).
+
+Corporate-action history is revisioned and point-in-time bounded. The endpoint is read-only and
+returns action factors, effective time, `known_at`, source, revision and rule version. It never
+changes candles and reports `application_mode=preview_only` plus `raw_candles_mutated=false`.
+Naive `as_of` timestamps are rejected. See
+[Point-in-time corporate action adjustments](../architecture/corporate-action-adjustments.md).
 
 The broker account endpoints use the same `X-Admin-Key` boundary even though their paths are not
 under `/admin`. Account numbers are masked, synchronization is read-only, and portfolio results

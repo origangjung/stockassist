@@ -233,6 +233,7 @@ def _candle(row: dict[str, Any]) -> Candle:
         low=_decimal(row, "lowPrice"),
         close=_decimal(row, "closePrice"),
         volume=_integer_decimal(row, "volume"),
+        price_basis="provider_adjusted",
     )
 
 

@@ -78,6 +78,7 @@ class SqlAlchemyCandleRepository(CandleRepository):
                     "low": candle.low,
                     "close": candle.close,
                     "volume": candle.volume,
+                    "price_basis": candle.price_basis,
                 }
                 if model is None:
                     session.add(
@@ -109,7 +110,13 @@ class SqlAlchemyCandleRepository(CandleRepository):
             models = list(reversed(session.scalars(statement).all()))
             return [
                 Candle(
-                    model.timestamp, model.open, model.high, model.low, model.close, model.volume
+                    model.timestamp,
+                    model.open,
+                    model.high,
+                    model.low,
+                    model.close,
+                    model.volume,
+                    model.price_basis,
                 )
                 for model in models
             ]

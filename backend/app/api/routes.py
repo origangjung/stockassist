@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from app.api.schemas import (
@@ -47,6 +48,7 @@ from app.services.provider_audit import (
 )
 from app.services.ingestion import IngestionOperationsService, IngestionUnavailableError
 from app.services.data_lifecycle import DataLifecycleMaintenanceService
+from app.services.corporate_actions import CorporateActionService
 
 router = APIRouter(prefix="/api/v1", tags=["market-data"])
 
@@ -163,6 +165,12 @@ def get_data_lifecycle_maintenance_service() -> DataLifecycleMaintenanceService:
     from app.main import data_lifecycle_maintenance_service
 
     return data_lifecycle_maintenance_service
+
+
+def get_corporate_action_service() -> CorporateActionService:
+    from app.main import corporate_action_service
+
+    return corporate_action_service
 
 
 def get_ingestion_operations_service() -> IngestionOperationsService:
@@ -563,6 +571,32 @@ def cleanup_expired_operational_data(
     service: DataLifecycleMaintenanceService = Depends(get_data_lifecycle_maintenance_service),
 ):
     return envelope(service.cleanup())
+
+
+@router.get(
+    "/admin/corporate-actions",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-pipeline"],
+    dependencies=[Depends(require_admin_access)],
+)
+def get_corporate_action_history(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    symbol: str | None = Query(default=None, pattern=r"^[0-9A-Z.-]{1,16}$"),
+    as_of: datetime | None = Query(default=None),
+    service: CorporateActionService = Depends(get_corporate_action_service),
+):
+    try:
+        return envelope(
+            service.recent(
+                limit=limit,
+                offset=offset,
+                symbol=symbol,
+                as_of=as_of,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post(

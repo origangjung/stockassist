@@ -4,6 +4,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
+PRICE_BASES = frozenset(
+    {"unknown", "unadjusted", "provider_adjusted", "point_in_time_adjusted"}
+)
+
 
 class Capability(str, Enum):
     QUOTE = "quote"
@@ -55,6 +59,11 @@ class Candle:
     low: Decimal
     close: Decimal
     volume: int
+    price_basis: str = "unknown"
+
+    def __post_init__(self) -> None:
+        if self.price_basis not in PRICE_BASES:
+            raise ValueError("Unsupported candle price basis")
 
 
 @dataclass(frozen=True)

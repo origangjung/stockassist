@@ -1,7 +1,15 @@
+from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.pipeline.candles import CandleInterval, CandlePipeline, QualitySeverity
+import pytest
+
+from app.pipeline.candles import (
+    CandleInterval,
+    CandlePipeline,
+    QualitySeverity,
+    aggregate_candles,
+)
 from app.providers.contracts import Candle
 
 
@@ -68,3 +76,17 @@ def test_gap_detection_sorts_timestamps_without_hiding_out_of_order_error():
 
     assert any(log.rule == "out_of_order" for log in result.quality_logs)
     assert any(log.rule == "missing_daily_candles" for log in result.quality_logs)
+
+
+def test_pipeline_preserves_price_basis_and_rejects_mixed_aggregation():
+    unadjusted = replace(candle(1, "10"), price_basis="unadjusted")
+    provider_adjusted = replace(candle(2, "11"), price_basis="provider_adjusted")
+
+    daily = CandlePipeline().process([unadjusted])
+    assert daily.cleaned_candles[0].price_basis == "unadjusted"
+
+    mixed = CandlePipeline().process([unadjusted, provider_adjusted])
+    assert any(log.rule == "mixed_price_basis" for log in mixed.quality_logs)
+    assert mixed.cleaned_candles == []
+    with pytest.raises(ValueError, match="mixed price bases"):
+        aggregate_candles([unadjusted, provider_adjusted], CandleInterval.WEEK)

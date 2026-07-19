@@ -12,6 +12,7 @@ const ruleLabels: Record<string, string> = {
   negative_volume: "음수 거래량",
   out_of_order: "시간 순서 오류",
   missing_daily_candles: "장기간 캔들 공백",
+  mixed_price_basis: "가격 기준 혼합",
 };
 
 function date(value: string | null): string {

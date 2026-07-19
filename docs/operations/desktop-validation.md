@@ -10,8 +10,10 @@ kept off the space-constrained laptop.
 - [ ] `docker compose config --quiet`
 - [ ] `docker compose build` and record image sizes
 - [ ] `docker compose up -d` and wait for healthy services
-- [ ] `docker compose exec api alembic heads` reports `20260719_0017`
+- [ ] `docker compose exec api alembic heads` reports `20260719_0018`
 - [ ] Confirm the three `created_at` lifecycle indexes exist in PostgreSQL
+- [ ] Confirm `corporate_actions` and `stock_candles.price_basis` exist after migration
+- [ ] Verify existing candle rows are `unknown` and new Toss rows are `provider_adjusted`
 - [ ] Open the admin Operations tab and verify lifecycle preview counts load
 - [ ] Verify the candle archive preview lists only complete monthly partitions older than the cutoff
 - [ ] Confirm candle archive preview reports `automatic_action=false`; do not detach or drop data

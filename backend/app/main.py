@@ -59,12 +59,14 @@ from app.services.provider_audit import (
 )
 from app.services.ingestion import CandleIngestionService, IngestionOperationsService
 from app.services.data_lifecycle import DataLifecycleMaintenanceService
+from app.services.corporate_actions import CorporateActionService
 from app.alerts import SqlAlchemyAlertRepository
 from app.realtime import build_realtime_quote_hub
 from app.score import ScoreEngine, TechnicalScoreCalculator
 from app.repositories.backtest import SqlAlchemyBacktestRepository
 from app.repositories.provider_audit import SqlAlchemyProviderAuditRepository
 from app.repositories.data_lifecycle import SqlAlchemyDataLifecycleRepository
+from app.repositories.corporate_action import SqlAlchemyCorporateActionRepository
 from app.repositories.score import SqlAlchemyScoreWeightRepository
 from app.repositories.sqlalchemy import (
     SqlAlchemyDisclosureRepository,
@@ -102,6 +104,10 @@ data_lifecycle_maintenance_service = DataLifecycleMaintenanceService(
     retention_days=settings.data_retention_days,
     cleanup_hour_kst=settings.data_lifecycle_cleanup_hour_kst,
 )
+corporate_action_repository = (
+    SqlAlchemyCorporateActionRepository(sessions) if sessions is not None else None
+)
+corporate_action_service = CorporateActionService(corporate_action_repository)
 providers = build_providers(settings, audit_sink=provider_audit_repository)
 broker_adapter = BrokerAdapter(providers)
 market_service = MarketDataService(broker_adapter)
