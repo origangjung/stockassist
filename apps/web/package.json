@@ -10,11 +10,11 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.0.0",
+    "@tanstack/react-query": "^5.101.4",
     "lightweight-charts": "^5.2.0",
     "next": "15.5.18",
-    "react": "19.1.7",
-    "react-dom": "19.1.7"
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
