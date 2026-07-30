@@ -161,6 +161,94 @@ def test_admin_authentication_rate_limits_repeated_failures():
         app.dependency_overrides.pop(get_settings, None)
 
 
+def test_admin_lockout_uses_distinct_trusted_proxy_client_ips():
+    settings = _settings("test-admin-secret")
+    settings.admin_max_failed_attempts = 3
+    settings.trust_proxy_headers = True
+    test_app = FastAPI()
+    test_app.dependency_overrides[get_settings] = lambda: settings
+
+    @test_app.get("/admin", dependencies=[Depends(require_admin_access)])
+    def protected():
+        return {"ok": True}
+
+    client = TestClient(test_app)
+    primary_headers = {"X-Admin-Key": "wrong", "X-Real-IP": "203.0.113.10"}
+    secondary_headers = {"X-Admin-Key": "wrong", "X-Real-IP": "203.0.113.11"}
+
+    primary_statuses = [client.get("/admin", headers=primary_headers).status_code for _ in range(3)]
+    secondary = client.get("/admin", headers=secondary_headers)
+    secondary_valid = client.get(
+        "/admin",
+        headers={"X-Admin-Key": "test-admin-secret", "X-Real-IP": "203.0.113.11"},
+    )
+    primary_valid = client.get(
+        "/admin",
+        headers={"X-Admin-Key": "test-admin-secret", "X-Real-IP": "203.0.113.10"},
+    )
+
+    assert primary_statuses == [401, 401, 429]
+    assert secondary.status_code == 401
+    assert secondary_valid.status_code == 200
+    assert primary_valid.status_code == 429
+
+
+def test_admin_lockout_ignores_forwarded_ip_when_proxy_headers_are_not_trusted():
+    settings = _settings("test-admin-secret")
+    settings.admin_max_failed_attempts = 3
+    settings.trust_proxy_headers = False
+    test_app = FastAPI()
+    test_app.dependency_overrides[get_settings] = lambda: settings
+
+    @test_app.get("/admin", dependencies=[Depends(require_admin_access)])
+    def protected():
+        return {"ok": True}
+
+    client = TestClient(test_app)
+    attempts = [
+        client.get(
+            "/admin",
+            headers={"X-Admin-Key": "wrong", "X-Real-IP": f"203.0.113.{index}"},
+        ).status_code
+        for index in range(10, 13)
+    ]
+    spoofed_valid = client.get(
+        "/admin",
+        headers={"X-Admin-Key": "test-admin-secret", "X-Real-IP": "198.51.100.99"},
+    )
+
+    assert attempts == [401, 401, 429]
+    assert spoofed_valid.status_code == 429
+
+
+def test_admin_lockout_rejects_invalid_or_oversized_trusted_proxy_ips():
+    settings = _settings("test-admin-secret")
+    settings.admin_max_failed_attempts = 3
+    settings.trust_proxy_headers = True
+    test_app = FastAPI()
+    test_app.dependency_overrides[get_settings] = lambda: settings
+
+    @test_app.get("/admin", dependencies=[Depends(require_admin_access)])
+    def protected():
+        return {"ok": True}
+
+    client = TestClient(test_app)
+    invalid_headers = (
+        "203.0.113.10, 203.0.113.11",
+        "not-an-ip",
+        "a" * 65,
+    )
+    statuses = [
+        client.get(
+            "/admin",
+            headers={"X-Admin-Key": "wrong", "X-Real-IP": real_ip},
+        ).status_code
+        for real_ip in invalid_headers
+    ]
+
+    assert statuses == [401, 401, 429]
+
+
 def test_distributed_admin_authentication_lockout_and_successful_reset():
     class DistributedLimiter:
         def __init__(self):
@@ -278,12 +366,37 @@ def test_production_rejects_sqlite_persistence_and_insecure_active_provider_url(
             database_url="sqlite:///./production.db",
         )
 
+
+def test_allowed_hosts_are_normalized_and_production_rejects_global_wildcard():
+    settings = Settings(_env_file=None, allowed_hosts="LOCALHOST, api.example.test,localhost")
+    assert settings.trusted_hosts == ["localhost", "api.example.test"]
+
+    with pytest.raises(ValueError, match="must not contain a wildcard"):
+        Settings(
+            _env_file=None,
+            app_environment="production",
+            admin_api_key="a" * 32,
+            allowed_hosts="*",
+        )
+
+
+def test_production_requires_a_strong_analysis_api_key():
+    with pytest.raises(ValueError, match=r"ANALYSIS_API_KEY must contain 32\+ characters"):
+        Settings(
+            _env_file=None,
+            app_environment="production",
+            admin_api_key="a" * 32,
+            analysis_api_key="short",
+        )
+
     with pytest.raises(ValueError, match="OPENAI_BASE_URL must use HTTPS"):
         Settings(
             _env_file=None,
             app_environment="production",
             admin_api_key="a" * 32,
+            analysis_api_key="b" * 32,
             ai_report_provider="openai",
+            openai_api_key="test-openai-key",
             openai_base_url="http://api.example.test/v1",
         )
 

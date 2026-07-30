@@ -1,6 +1,8 @@
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from threading import Lock
+from time import perf_counter
 import time
 from typing import Iterator, Protocol
 
@@ -8,7 +10,10 @@ import httpx2
 from redis import Redis
 from redis.exceptions import RedisError
 
+from app.core.request_context import current_request_id
+from app.providers.audit import ProviderAuditSink
 from app.providers.errors import ProviderAuthenticationError, ProviderUnavailableError
+from app.providers.toss.audit import extract_provider_request_id, record_toss_audit
 from app.providers.toss.rate_limit import TossRateLimiter
 
 
@@ -125,6 +130,7 @@ class TossTokenManager:
         client_secret: str,
         cache: TokenCache | None = None,
         clock=time.time,
+        audit_sink: ProviderAuditSink | None = None,
     ) -> None:
         self._client = client
         self._limiter = limiter
@@ -132,6 +138,7 @@ class TossTokenManager:
         self._client_secret = client_secret
         self._cache = cache or InMemoryTokenCache()
         self._clock = clock
+        self._audit_sink = audit_sink
         self._lock = Lock()
         self._cache_key = f"toss:oauth:{client_id}"
 
@@ -153,6 +160,9 @@ class TossTokenManager:
         return token is not None and token.expires_at - 30 > self._clock()
 
     def _issue(self) -> AccessToken:
+        started_at = perf_counter()
+        occurred_at = datetime.now(timezone.utc)
+        internal_request_id = current_request_id()
         self._limiter.acquire("AUTH")
         try:
             response = self._client.post(
@@ -164,33 +174,124 @@ class TossTokenManager:
                 },
             )
         except httpx2.RequestError as exc:
+            self._record_audit(
+                outcome="transport_error",
+                status_code=None,
+                error_code="provider-unavailable",
+                provider_request_id=None,
+                internal_request_id=internal_request_id,
+                started_at=started_at,
+                occurred_at=occurred_at,
+            )
             raise ProviderUnavailableError("Toss OAuth server is unavailable") from exc
         self._limiter.observe("AUTH", response.headers)
-        payload = _json_object(response)
+        try:
+            payload = _json_object(response)
+        except ProviderUnavailableError as exc:
+            self._record_audit(
+                outcome="error",
+                status_code=response.status_code,
+                error_code=exc.code,
+                provider_request_id=extract_provider_request_id({}, response.headers),
+                internal_request_id=internal_request_id,
+                started_at=started_at,
+                occurred_at=occurred_at,
+            )
+            raise
         if response.status_code >= 400:
+            # OAuth error payloads come from an external service.  Do not
+            # propagate a provider-supplied code into logs, audit storage, or
+            # public API responses.
+            error_code = f"toss-oauth-http-{response.status_code}"
+            provider_request_id = extract_provider_request_id(payload, response.headers)
+            self._record_audit(
+                outcome="error",
+                status_code=response.status_code,
+                error_code=error_code,
+                provider_request_id=provider_request_id,
+                internal_request_id=internal_request_id,
+                started_at=started_at,
+                occurred_at=occurred_at,
+            )
             raise ProviderAuthenticationError(
                 payload.get("error_description") or "Toss OAuth authentication failed",
-                code=str(payload.get("error") or "oauth-error"),
+                code=error_code,
+                request_id=provider_request_id,
                 status_code=502,
             )
         try:
-            value = str(payload["access_token"])
+            value = payload["access_token"]
             expires_in = int(payload["expires_in"])
+            if (
+                not isinstance(value, str)
+                or not value.strip()
+                or value != value.strip()
+                or expires_in <= 30
+            ):
+                raise ValueError("OAuth access token is empty or expires too soon")
         except (KeyError, TypeError, ValueError) as exc:
+            self._record_audit(
+                outcome="error",
+                status_code=response.status_code,
+                error_code="invalid-oauth-response",
+                provider_request_id=extract_provider_request_id(payload, response.headers),
+                internal_request_id=internal_request_id,
+                started_at=started_at,
+                occurred_at=occurred_at,
+            )
             raise ProviderAuthenticationError(
                 "Toss OAuth response did not contain a valid access token",
                 code="invalid-oauth-response",
             ) from exc
         token = AccessToken(value=value, expires_at=self._clock() + expires_in)
         self._cache.set(self._cache_key, token)
+        self._record_audit(
+            outcome="success",
+            status_code=response.status_code,
+            error_code=None,
+            provider_request_id=extract_provider_request_id(payload, response.headers),
+            internal_request_id=internal_request_id,
+            started_at=started_at,
+            occurred_at=occurred_at,
+        )
         return token
+
+    def _record_audit(
+        self,
+        *,
+        outcome: str,
+        status_code: int | None,
+        error_code: str | None,
+        provider_request_id: str | None,
+        internal_request_id: str,
+        started_at: float,
+        occurred_at: datetime,
+    ) -> None:
+        record_toss_audit(
+            self._audit_sink,
+            method="POST",
+            path="/oauth2/token",
+            group="AUTH",
+            outcome=outcome,
+            status_code=status_code,
+            error_code=error_code,
+            provider_request_id=provider_request_id,
+            internal_request_id=internal_request_id,
+            attempt_count=1,
+            started_at=started_at,
+            occurred_at=occurred_at,
+        )
 
 
 def _json_object(response: httpx2.Response) -> dict:
     try:
         payload = response.json()
     except ValueError as exc:
-        raise ProviderUnavailableError("Toss returned a non-JSON response") from exc
+        raise ProviderUnavailableError(
+            "Toss returned a non-JSON response", code="invalid-oauth-response"
+        ) from exc
     if not isinstance(payload, dict):
-        raise ProviderUnavailableError("Toss returned an invalid response envelope")
+        raise ProviderUnavailableError(
+            "Toss returned an invalid response envelope", code="invalid-oauth-response"
+        )
     return payload

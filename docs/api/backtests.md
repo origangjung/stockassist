@@ -16,7 +16,8 @@
   "commission_rate": 0.00015,
   "tax_rate": 0.0018,
   "slippage_rate": 0.0005,
-  "max_volume_participation": 0.1
+  "max_volume_participation": 0.1,
+  "corporate_action_mode": "none"
 }
 ```
 
@@ -41,6 +42,22 @@ creates a `partial_fill` event; zero available liquidity creates a `rejected` ev
 `force_close` bypasses the limit to preserve the configured close-out contract and records that
 bypass in the order and fill audit events. The vectorized engine does not apply this limit.
 
+`corporate_action_mode` defaults to `none`. The explicit `forward_point_in_time` mode is available
+only when corporate-action persistence is enabled. It accepts only candles whose price basis is
+`unadjusted`, uses revisions known no later than the candle snapshot, and forward-normalizes
+post-event candles rather than rewriting pre-event history. This prevents a later split from
+changing a strategy signal that was calculated before the split was known.
+
+The conservative first version rejects an event when its confirmed knowledge time is after its
+effective time or when multiple correction/cancellation revisions are present by the end of the
+snapshot. It also rejects provider-adjusted and legacy-unknown candles. Responses contain
+`corporate_action_adjustment` with the mode, direction, price bases, version and exact source event
+IDs/revisions used. Persisted runs store the same metadata in their config. No source candle is
+mutated.
+The same metadata records the validated input Provider, expected basis, verification status and
+price-basis rule version. A persisted run therefore identifies both the corporate-action operation
+and the Provider policy that classified its source candles.
+
 ## Walk-forward validation
 
 `POST /api/v1/backtests/walk-forward`
@@ -57,7 +74,8 @@ bypass in the order and fill audit events. The vectorized engine does not apply 
   "commission_rate": 0.00015,
   "tax_rate": 0.0018,
   "slippage_rate": 0.0005,
-  "max_volume_participation": 0.1
+  "max_volume_participation": 0.1,
+  "corporate_action_mode": "none"
 }
 ```
 
@@ -80,7 +98,8 @@ instances, and runs both engines without persisting duplicate history rows.
   "commission_rate": 0.00015,
   "tax_rate": 0.0018,
   "slippage_rate": 0.0005,
-  "max_volume_participation": 0.1
+  "max_volume_participation": 0.1,
+  "corporate_action_mode": "none"
 }
 ```
 
@@ -111,7 +130,8 @@ execution engine. Comparison runs are not written to normal backtest history.
   "commission_rate": 0.00015,
   "tax_rate": 0.0018,
   "slippage_rate": 0.0005,
-  "max_volume_participation": 0.1
+  "max_volume_participation": 0.1,
+  "corporate_action_mode": "none"
 }
 ```
 

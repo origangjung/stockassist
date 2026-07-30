@@ -36,8 +36,11 @@ package-dir = {"" = "backend"}
 where = ["backend"]
 
 [tool.pytest.ini_options]
-pythonpath = ["backend"]
+pythonpath = ["backend", "."]
 testpaths = ["backend/tests"]
+markers = [
+  "ml: requires the optional scikit-learn and XGBoost dependencies",
+]
 
 [tool.ruff]
 line-length = 100

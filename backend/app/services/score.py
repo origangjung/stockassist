@@ -65,9 +65,8 @@ class ScoreService:
         return self.analysis_bundle(symbol, limit).score
 
     def analysis_bundle(self, symbol: str, limit: int) -> ScoreAnalysisBundle:
-        provider = self._broker.provider_for(Capability.CANDLES)
-        raw = provider.get_candles(symbol, limit)
-        candles = self._pipeline.process(raw).cleaned_candles
+        batch = self._broker.candles(symbol, limit)
+        candles = self._pipeline.process(batch.candles).cleaned_candles
         indicator_rows = self._indicators.calculate(candles)
         engine = (
             ScoreEngine(self._weights.get_active())
@@ -126,7 +125,7 @@ class ScoreService:
         )
         score = {
             "symbol": symbol,
-            "provider": provider.name,
+            "provider": batch.provider.name,
             "data_as_of": candles[-1].timestamp,
             **asdict(result),
         }

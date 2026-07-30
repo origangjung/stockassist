@@ -16,7 +16,7 @@ os.environ.update(
         "DISCLOSURE_PROVIDER": "mock",
         "NEWS_PROVIDER": "mock",
         "INVESTOR_FLOW_PROVIDER": "mock",
-        "PREDICTION_ENGINE": "xgboost",
+        "PREDICTION_ENGINE": "lightweight",
         "AI_REPORT_PROVIDER": "mock",
         "ACCOUNT_SYNC_ENABLED": "true",
         "REALTIME_ENABLED": "false",

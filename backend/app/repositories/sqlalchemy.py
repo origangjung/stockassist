@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -13,6 +15,10 @@ from app.models.portfolio import BrokerAccountModel, HoldingModel
 from app.pipeline.candles import DataQualityLog, DataQualityLogRecord, QualitySeverity
 from app.providers.contracts import Candle, StockInfo
 from app.repositories.contracts import (
+    CandleIngestionRepository,
+    CandleIngestionWrite,
+    CandlePriceBasisInventory,
+    CandlePriceBasisInventoryRow,
     CandleRepository,
     QualityLogReadRepository,
     QualityLogRepository,
@@ -32,21 +38,101 @@ from app.repositories.contracts import PortfolioRepository
 from app.providers.contracts import BrokerAccount, HoldingsSnapshot
 
 
+def _validate_candle_provenance(
+    source_provider: str,
+    price_basis_rule_version: str,
+) -> None:
+    if not source_provider or len(source_provider) > 32:
+        raise ValueError("Candle source provider must contain 1 to 32 characters")
+    if not price_basis_rule_version or len(price_basis_rule_version) > 32:
+        raise ValueError("Candle price-basis rule version must contain 1 to 32 characters")
+
+
+def _upsert_stock(session: Session, stock: StockInfo) -> None:
+    model = session.get(StockModel, stock.symbol)
+    if model is None:
+        session.add(StockModel(**stock.__dict__))
+        return
+    model.name = stock.name
+    model.market = stock.market
+    model.currency = stock.currency
+    model.sector = stock.sector
+    model.listed_at = stock.listed_at
+
+
+def _save_candles(
+    session: Session,
+    symbol: str,
+    candles: list[Candle],
+    *,
+    interval: str,
+    stage: str,
+    aggregation_version: str,
+    source_provider: str,
+    price_basis_rule_version: str,
+) -> None:
+    for candle in candles:
+        model = session.scalar(
+            select(StockCandleModel).where(
+                StockCandleModel.symbol == symbol,
+                StockCandleModel.timestamp == candle.timestamp,
+                StockCandleModel.interval == interval,
+                StockCandleModel.data_stage == stage,
+                StockCandleModel.aggregation_version == aggregation_version,
+            )
+        )
+        values = {
+            "open": candle.open,
+            "high": candle.high,
+            "low": candle.low,
+            "close": candle.close,
+            "volume": candle.volume,
+            "price_basis": candle.price_basis,
+            "source_provider": source_provider,
+            "price_basis_rule_version": price_basis_rule_version,
+        }
+        if model is None:
+            session.add(
+                StockCandleModel(
+                    symbol=symbol,
+                    timestamp=candle.timestamp,
+                    interval=interval,
+                    data_stage=stage,
+                    aggregation_version=aggregation_version,
+                    **values,
+                )
+            )
+        else:
+            for key, value in values.items():
+                setattr(model, key, value)
+
+
+def _save_quality_logs(
+    session: Session,
+    symbol: str,
+    logs: list[DataQualityLog],
+) -> None:
+    session.add_all(
+        [
+            DataQualityLogModel(
+                symbol=symbol,
+                rule=log.rule,
+                severity=log.severity.value,
+                message=log.message,
+                observed_at=log.timestamp,
+            )
+            for log in logs
+        ]
+    )
+
+
 class SqlAlchemyStockRepository(StockRepository):
     def __init__(self, sessions: sessionmaker[Session]):
         self._sessions = sessions
 
     def upsert(self, stock: StockInfo) -> None:
         with self._sessions.begin() as session:
-            model = session.get(StockModel, stock.symbol)
-            if model is None:
-                session.add(StockModel(**stock.__dict__))
-            else:
-                model.name = stock.name
-                model.market = stock.market
-                model.currency = stock.currency
-                model.sector = stock.sector
-                model.listed_at = stock.listed_at
+            _upsert_stock(session, stock)
 
 
 class SqlAlchemyCandleRepository(CandleRepository):
@@ -61,39 +147,21 @@ class SqlAlchemyCandleRepository(CandleRepository):
         interval: str,
         stage: str,
         aggregation_version: str,
+        source_provider: str,
+        price_basis_rule_version: str,
     ) -> None:
+        _validate_candle_provenance(source_provider, price_basis_rule_version)
         with self._sessions.begin() as session:
-            for candle in candles:
-                statement = select(StockCandleModel).where(
-                    StockCandleModel.symbol == symbol,
-                    StockCandleModel.timestamp == candle.timestamp,
-                    StockCandleModel.interval == interval,
-                    StockCandleModel.data_stage == stage,
-                    StockCandleModel.aggregation_version == aggregation_version,
-                )
-                model = session.scalar(statement)
-                values = {
-                    "open": candle.open,
-                    "high": candle.high,
-                    "low": candle.low,
-                    "close": candle.close,
-                    "volume": candle.volume,
-                    "price_basis": candle.price_basis,
-                }
-                if model is None:
-                    session.add(
-                        StockCandleModel(
-                            symbol=symbol,
-                            timestamp=candle.timestamp,
-                            interval=interval,
-                            data_stage=stage,
-                            aggregation_version=aggregation_version,
-                            **values,
-                        )
-                    )
-                else:
-                    for key, value in values.items():
-                        setattr(model, key, value)
+            _save_candles(
+                session,
+                symbol,
+                candles,
+                interval=interval,
+                stage=stage,
+                aggregation_version=aggregation_version,
+                source_provider=source_provider,
+                price_basis_rule_version=price_basis_rule_version,
+            )
 
     def find(self, symbol: str, *, interval: str, stage: str, limit: int) -> list[Candle]:
         with self._sessions() as session:
@@ -121,6 +189,172 @@ class SqlAlchemyCandleRepository(CandleRepository):
                 for model in models
             ]
 
+    def price_basis_inventory(
+        self,
+        *,
+        symbol: str,
+        limit: int = 200,
+    ) -> CandlePriceBasisInventory:
+        filters = [StockCandleModel.symbol == symbol]
+        group_columns = (
+            StockCandleModel.source_provider,
+            StockCandleModel.price_basis,
+            StockCandleModel.price_basis_rule_version,
+            StockCandleModel.data_stage,
+            StockCandleModel.interval,
+            StockCandleModel.aggregation_version,
+        )
+        grouped = (
+            select(
+                *group_columns,
+                func.count().label("candle_count"),
+                func.min(StockCandleModel.timestamp).label("first_timestamp"),
+                func.max(StockCandleModel.timestamp).label("last_timestamp"),
+            )
+            .where(*filters)
+            .group_by(*group_columns)
+        )
+        with self._sessions() as session:
+            total_candles = (
+                session.scalar(select(func.count()).select_from(StockCandleModel).where(*filters))
+                or 0
+            )
+            unknown_candles = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(StockCandleModel)
+                    .where(*filters, StockCandleModel.price_basis == "unknown")
+                )
+                or 0
+            )
+            legacy_unknown_candles = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(StockCandleModel)
+                    .where(*filters, StockCandleModel.source_provider == "legacy_unknown")
+                )
+                or 0
+            )
+            legacy_rule_candles = (
+                session.scalar(
+                    select(func.count())
+                    .select_from(StockCandleModel)
+                    .where(
+                        *filters,
+                        StockCandleModel.price_basis_rule_version == "legacy_unknown",
+                    )
+                )
+                or 0
+            )
+            total_groups = session.scalar(select(func.count()).select_from(grouped.subquery())) or 0
+            records = session.execute(
+                grouped.order_by(
+                    StockCandleModel.source_provider,
+                    StockCandleModel.price_basis,
+                    StockCandleModel.price_basis_rule_version,
+                    StockCandleModel.data_stage,
+                    StockCandleModel.interval,
+                    StockCandleModel.aggregation_version,
+                ).limit(limit)
+            ).all()
+        return CandlePriceBasisInventory(
+            rows=[
+                CandlePriceBasisInventoryRow(
+                    source_provider=row.source_provider,
+                    price_basis=row.price_basis,
+                    price_basis_rule_version=row.price_basis_rule_version,
+                    data_stage=row.data_stage,
+                    interval=row.interval,
+                    aggregation_version=row.aggregation_version,
+                    candle_count=row.candle_count,
+                    first_timestamp=row.first_timestamp,
+                    last_timestamp=row.last_timestamp,
+                )
+                for row in records
+            ],
+            total_candles=total_candles,
+            unknown_candles=unknown_candles,
+            legacy_unknown_candles=legacy_unknown_candles,
+            legacy_rule_candles=legacy_rule_candles,
+            total_groups=total_groups,
+        )
+
+
+class SqlAlchemyCandleIngestionRepository(CandleIngestionRepository):
+    """Persist one complete candle ingestion in a single database transaction."""
+
+    def __init__(self, sessions: sessionmaker[Session]):
+        self._sessions = sessions
+
+    def save(self, batch: CandleIngestionWrite) -> None:
+        self._validate_provenance(batch)
+        with self._sessions.begin() as session:
+            self._upsert_stock(session, batch.stock)
+            session.flush()
+            self._save_candles(
+                session,
+                batch.stock.symbol,
+                batch.raw_candles,
+                interval=batch.interval,
+                stage="raw",
+                aggregation_version="raw",
+                source_provider=batch.source_provider,
+                price_basis_rule_version=batch.price_basis_rule_version,
+            )
+            self._save_candles(
+                session,
+                batch.stock.symbol,
+                batch.cleaned_candles,
+                interval=batch.interval,
+                stage="cleaned",
+                aggregation_version=batch.cleaned_aggregation_version,
+                source_provider=batch.source_provider,
+                price_basis_rule_version=batch.price_basis_rule_version,
+            )
+            self._save_quality_logs(session, batch.stock.symbol, batch.quality_logs)
+
+    @staticmethod
+    def _validate_provenance(batch: CandleIngestionWrite) -> None:
+        _validate_candle_provenance(
+            batch.source_provider,
+            batch.price_basis_rule_version,
+        )
+
+    @staticmethod
+    def _upsert_stock(session: Session, stock: StockInfo) -> None:
+        _upsert_stock(session, stock)
+
+    @staticmethod
+    def _save_candles(
+        session: Session,
+        symbol: str,
+        candles: list[Candle],
+        *,
+        interval: str,
+        stage: str,
+        aggregation_version: str,
+        source_provider: str,
+        price_basis_rule_version: str,
+    ) -> None:
+        _save_candles(
+            session,
+            symbol,
+            candles,
+            interval=interval,
+            stage=stage,
+            aggregation_version=aggregation_version,
+            source_provider=source_provider,
+            price_basis_rule_version=price_basis_rule_version,
+        )
+
+    @staticmethod
+    def _save_quality_logs(
+        session: Session,
+        symbol: str,
+        logs: list[DataQualityLog],
+    ) -> None:
+        _save_quality_logs(session, symbol, logs)
+
 
 class SqlAlchemyQualityLogRepository(QualityLogRepository, QualityLogReadRepository):
     def __init__(self, sessions: sessionmaker[Session]):
@@ -128,18 +362,7 @@ class SqlAlchemyQualityLogRepository(QualityLogRepository, QualityLogReadReposit
 
     def save_many(self, symbol: str, logs: list[DataQualityLog]) -> None:
         with self._sessions.begin() as session:
-            session.add_all(
-                [
-                    DataQualityLogModel(
-                        symbol=symbol,
-                        rule=log.rule,
-                        severity=log.severity.value,
-                        message=log.message,
-                        observed_at=log.timestamp,
-                    )
-                    for log in logs
-                ]
-            )
+            _save_quality_logs(session, symbol, logs)
 
     def list_recent(
         self,
@@ -155,9 +378,12 @@ class SqlAlchemyQualityLogRepository(QualityLogRepository, QualityLogReadReposit
         if severity:
             filters.append(DataQualityLogModel.severity == severity)
         with self._sessions() as session:
-            total = session.scalar(
-                select(func.count()).select_from(DataQualityLogModel).where(*filters)
-            ) or 0
+            total = (
+                session.scalar(
+                    select(func.count()).select_from(DataQualityLogModel).where(*filters)
+                )
+                or 0
+            )
             counts = {
                 row.severity: row.total
                 for row in session.execute(
@@ -394,6 +620,12 @@ class SqlAlchemyAIReportRepository(AIReportRepository):
         self._sessions = sessions
 
     def save(self, report: dict) -> None:
+        # PostgreSQL's JSON column delegates serialization to Python's stdlib JSON
+        # encoder, which cannot write Decimal values emitted by score/prediction
+        # engines. Keep the in-memory report numerically precise for the caller,
+        # but persist an explicitly JSON-safe snapshot at this infrastructure
+        # boundary. Decimal values are strings so no precision is lost.
+        persisted_report = jsonable_encoder(report, custom_encoder={Decimal: str})
         with self._sessions.begin() as session:
             session.add(
                 AIReportModel(
@@ -402,7 +634,7 @@ class SqlAlchemyAIReportRepository(AIReportRepository):
                     model_version=report["model_version"],
                     validation_status=report["validation_status"],
                     data_as_of=report["data_as_of"],
-                    report=report,
+                    report=persisted_report,
                 )
             )
 

@@ -130,7 +130,30 @@ def test_backtest_api_exposes_experimental_metrics_and_compliance():
     assert body["data"]["validation_status"] == "experimental"
     assert "max_drawdown" in body["data"]["metrics"]
     assert body["data"]["persistence_status"] == "disabled"
+    assert body["data"]["corporate_action_adjustment"]["mode"] == "none"
+    assert body["data"]["corporate_action_adjustment"]["enabled"] is False
+    assert body["data"]["corporate_action_adjustment"]["input_price_basis_policy"] == {
+        "provider": "mock",
+        "expected_basis": "unadjusted",
+        "verification_status": "synthetic",
+        "rule_version": "mock-candles-v1",
+    }
     assert body["is_investment_advice"] is False
+
+
+def test_backtest_corporate_action_opt_in_fails_closed_without_persistence():
+    response = client.post(
+        "/api/v1/backtests",
+        json={
+            "symbol": "005930",
+            "strategy": "buy_and_hold",
+            "limit": 30,
+            "corporate_action_mode": "forward_point_in_time",
+        },
+    )
+
+    assert response.status_code == 503
+    assert "persistence is required" in response.json()["error"]["message"]
 
 
 def test_event_driven_backtest_api_exposes_auditable_events():

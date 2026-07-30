@@ -4,10 +4,9 @@ from time import perf_counter
 from typing import Any, Callable
 
 import httpx2
-import structlog
 
 from app.core.request_context import current_request_id
-from app.providers.audit import ProviderAuditEvent, ProviderAuditSink
+from app.providers.audit import ProviderAuditSink
 from app.providers.errors import (
     ProviderAuthenticationError,
     ProviderConflictError,
@@ -18,10 +17,9 @@ from app.providers.errors import (
     ProviderUnavailableError,
     ProviderValidationError,
 )
+from app.providers.toss.audit import extract_provider_request_id, record_toss_audit
 from app.providers.toss.auth import TossTokenManager
 from app.providers.toss.rate_limit import TossRateLimiter
-
-logger = structlog.get_logger(__name__)
 
 
 class TossApiClient:
@@ -173,32 +171,20 @@ class TossApiClient:
         started_at: float,
         occurred_at: datetime,
     ) -> None:
-        if self._audit_sink is None:
-            return
-        event = ProviderAuditEvent(
-            provider="toss",
-            method=method.upper()[:8],
-            endpoint=path.partition("?")[0][:255],
-            api_group=group[:64],
+        record_toss_audit(
+            self._audit_sink,
+            method=method,
+            path=path,
+            group=group,
             outcome=outcome,
             status_code=status_code,
-            error_code=_bounded_text(error_code),
-            provider_request_id=_bounded_text(provider_request_id),
-            internal_request_id=_bounded_text(internal_request_id) or "unknown",
-            attempt_count=max(attempt_count, 1),
-            duration_ms=max(round((perf_counter() - started_at) * 1000, 3), 0),
+            error_code=error_code,
+            provider_request_id=provider_request_id,
+            internal_request_id=internal_request_id,
+            attempt_count=attempt_count,
+            started_at=started_at,
             occurred_at=occurred_at,
         )
-        try:
-            self._audit_sink.save(event)
-        except Exception:
-            logger.exception(
-                "provider_audit_save_failed",
-                provider="toss",
-                endpoint=event.endpoint,
-                outcome=event.outcome,
-                attempt_count=event.attempt_count,
-            )
 
     def close(self) -> None:
         self._http.close()
@@ -217,7 +203,10 @@ def _json_object(response: httpx2.Response) -> dict[str, Any]:
 def _map_error(status_code: int, payload: dict[str, Any], headers: httpx2.Headers) -> ProviderError:
     raw_error = payload.get("error")
     error = raw_error if isinstance(raw_error, dict) else {}
-    code = str(error.get("code") or f"http-{status_code}")
+    # Upstream error codes are untrusted metadata.  Keep them out of public
+    # responses, logs, and audit records; the HTTP status is sufficient for a
+    # stable, provider-owned error category.
+    code = f"toss-http-{status_code}"
     message = str(error.get("message") or "Toss API request failed")
     request_id = _extract_request_id(payload, headers)
     data = error.get("data") if isinstance(error.get("data"), dict) else None
@@ -245,19 +234,4 @@ def _map_error(status_code: int, payload: dict[str, Any], headers: httpx2.Header
 
 
 def _extract_request_id(payload: dict[str, Any], headers: httpx2.Headers) -> str | None:
-    raw_error = payload.get("error")
-    error = raw_error if isinstance(raw_error, dict) else {}
-    value = (
-        error.get("requestId")
-        or payload.get("requestId")
-        or headers.get("X-Request-Id")
-        or headers.get("x-amz-cf-id")
-    )
-    return _bounded_text(None if value is None else str(value))
-
-
-def _bounded_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    cleaned = "".join(character for character in str(value) if character.isprintable()).strip()
-    return cleaned[:128] or None
+    return extract_provider_request_id(payload, headers)

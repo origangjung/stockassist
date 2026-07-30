@@ -7,6 +7,7 @@ from sklearn.metrics import accuracy_score, brier_score_loss
 from xgboost import XGBClassifier
 
 from app.prediction.contracts import PredictionResult
+from app.prediction.artifacts import ModelArtifactStore
 from app.prediction.features import build_feature_dataset
 from app.prediction.validation import PurgedWalkForwardSplit
 from app.providers.contracts import Candle
@@ -15,8 +16,38 @@ from app.providers.contracts import Candle
 class XGBoostPredictionEngine:
     algorithm = "xgboost"
 
+    def __init__(self, artifact_store: ModelArtifactStore | None = None) -> None:
+        self._artifact_store = artifact_store
+
     def predict(self, symbol: str, candles: list[Candle], *, horizon_days: int) -> PredictionResult:
         dataset = build_feature_dataset(candles, horizon_days)
+        active = (
+            self._artifact_store.current(
+                symbol=symbol,
+                algorithm=self.algorithm,
+                horizon_days=horizon_days,
+            )
+            if self._artifact_store is not None
+            else None
+        )
+        if active is not None:
+            model = self._new_model()
+            model.load_model(self._artifact_store.artifact_path(active))
+            probability = float(model.predict_proba(dataset.prediction_features)[0, 1])
+            validation_count = max(1, int(active.validation_metrics.get("validation_samples", 1)))
+            uncertainty = 1.96 * np.sqrt(probability * (1 - probability) / validation_count)
+            return PredictionResult(
+                symbol=symbol,
+                horizon_days=horizon_days,
+                rise_probability=_decimal(probability),
+                confidence_lower=_decimal(max(0.0, probability - uncertainty)),
+                confidence_upper=_decimal(min(1.0, probability + uncertainty)),
+                model_version=active.version,
+                validation_metrics=active.validation_metrics,
+                validation_status=active.validation_status,
+                data_as_of=dataset.data_as_of.astimezone(timezone.utc),
+            )
+
         splitter = PurgedWalkForwardSplit(horizon_days=horizon_days)
         probabilities: list[float] = []
         actuals: list[int] = []
@@ -49,7 +80,7 @@ class XGBoostPredictionEngine:
             f"{len(dataset.labels)}|{dataset.feature_names}|{training_fingerprint.hexdigest()}"
         )
         model_version = f"xgb-{sha256(version_input.encode()).hexdigest()[:12]}"
-        return PredictionResult(
+        result = PredictionResult(
             symbol=symbol,
             horizon_days=horizon_days,
             rise_probability=_decimal(probability),
@@ -60,6 +91,17 @@ class XGBoostPredictionEngine:
             validation_status="experimental",
             data_as_of=dataset.data_as_of.astimezone(timezone.utc),
         )
+        if self._artifact_store is not None:
+            self._artifact_store.stage(
+                version=model_version,
+                symbol=symbol,
+                algorithm=self.algorithm,
+                horizon_days=horizon_days,
+                validation_status=result.validation_status,
+                validation_metrics=result.validation_metrics,
+                write_artifact=final_model.save_model,
+            )
+        return result
 
     @staticmethod
     def _new_model() -> XGBClassifier:

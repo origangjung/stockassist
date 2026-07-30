@@ -37,6 +37,24 @@ Default costs are commission 0.015%, sell tax 0.18%, and slippage 0.05%. Results
 return, CAGR, maximum drawdown, Sharpe ratio, completed-trade win rate, trade count, equity curve,
 trades and the event audit log.
 
+## Corporate-action-safe opt-in
+
+Backtests default to the provider candle basis with `corporate_action_mode=none`. An operator may
+explicitly select `forward_point_in_time` only when immutable corporate-action persistence exists.
+The backtest adapter refuses `provider_adjusted`, `unknown`, mixed-basis and already-adjusted input.
+
+The general chart view uses backward adjustment to display a current point-in-time price history;
+that representation is not passed to a strategy because it would let an event learned later alter
+earlier signals. The backtest-specific engine instead leaves every pre-event candle untouched and
+applies inverse factors from the effective candle forward. For a 2-for-1 split, post-event prices
+are multiplied by two and post-event volume is divided by two, preserving the earlier unit basis
+without knowledge leaking into earlier observations.
+
+Version `2026.1` accepts only a single confirmed revision whose `known_at` is no later than its
+effective time. A later correction or cancellation makes the entire opt-in request fail instead of
+silently choosing a hindsight revision. Every run reports and, when enabled, persists its mode,
+input/output basis, source, event ID, revision, effective time, known time and rule version.
+
 ## Pattern reference strategy
 
 `pattern_reference` converts the deterministic Pattern Engine output into a long-only research

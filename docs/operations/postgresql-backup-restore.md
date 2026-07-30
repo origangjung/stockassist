@@ -48,11 +48,11 @@ Do not drop a database until its identity and purpose have been independently co
 
 Check that critical tables exist and compare row counts between the source and restored database.
 At minimum compare `stocks`, `stock_candles`, `data_quality_logs`, `backtest_runs`, `predictions`,
-`ai_reports`, `portfolios`, `holdings` and `provider_audit_logs`.
+`ai_reports`, `broker_accounts`, `holdings` and `provider_audit_logs`.
 
 ```powershell
 docker compose exec -T postgres psql -U stockpilot -d stockpilot_restore_check -c "SELECT version_num FROM alembic_version;"
-docker compose exec -T postgres psql -U stockpilot -d stockpilot_restore_check -c "SELECT count(*) FROM stocks; SELECT count(*) FROM stock_candles; SELECT count(*) FROM backtest_runs;"
+docker compose exec -T postgres psql -U stockpilot -d stockpilot_restore_check -c "SELECT count(*) FROM stocks; SELECT count(*) FROM stock_candles; SELECT count(*) FROM backtest_runs; SELECT count(*) FROM broker_accounts;"
 ```
 
 Run the API against the restored database only in an isolated process/container and verify

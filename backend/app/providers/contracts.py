@@ -4,8 +4,35 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-PRICE_BASES = frozenset(
-    {"unknown", "unadjusted", "provider_adjusted", "point_in_time_adjusted"}
+PRICE_BASES = frozenset({"unknown", "unadjusted", "provider_adjusted", "point_in_time_adjusted"})
+CANDLE_PRICE_BASIS_VERIFICATION_STATUSES = frozenset({"unverified", "verified", "synthetic"})
+
+
+@dataclass(frozen=True)
+class CandlePriceBasisPolicy:
+    expected_basis: str
+    verification_status: str
+    rule_version: str
+    evidence: str
+
+    def __post_init__(self) -> None:
+        if self.expected_basis not in PRICE_BASES:
+            raise ValueError("Unsupported Provider candle price basis")
+        if self.verification_status not in CANDLE_PRICE_BASIS_VERIFICATION_STATUSES:
+            raise ValueError("Unsupported candle price-basis verification status")
+        if self.verification_status == "unverified" and self.expected_basis != "unknown":
+            raise ValueError("Unverified Provider policies must use the unknown price basis")
+        if not self.rule_version or len(self.rule_version) > 32:
+            raise ValueError("Candle price-basis rule version must contain 1 to 32 characters")
+        if not self.evidence:
+            raise ValueError("Candle price-basis policy evidence is required")
+
+
+UNKNOWN_CANDLE_PRICE_BASIS_POLICY = CandlePriceBasisPolicy(
+    expected_basis="unknown",
+    verification_status="unverified",
+    rule_version="provider-contract-v1",
+    evidence="Provider has not declared verified candle adjustment semantics",
 )
 
 
@@ -147,6 +174,7 @@ class HoldingsSnapshot:
 class StockProvider(ABC):
     name: str
     capabilities: ProviderCapabilities
+    candle_price_basis_policy = UNKNOWN_CANDLE_PRICE_BASIS_POLICY
 
     @abstractmethod
     def get_quote(self, symbol: str) -> Quote: ...

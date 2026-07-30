@@ -8,6 +8,7 @@ from app.adapters.broker import BrokerAdapter
 from app.config import Settings
 from app.database import create_session_factory
 from app.repositories.sqlalchemy import (
+    SqlAlchemyCandleIngestionRepository,
     SqlAlchemyCandleRepository,
     SqlAlchemyQualityLogRepository,
     SqlAlchemyStockRepository,
@@ -40,6 +41,7 @@ def build_scheduler(
             SqlAlchemyStockRepository(sessions),
             SqlAlchemyCandleRepository(sessions),
             SqlAlchemyQualityLogRepository(sessions),
+            atomic_repository=SqlAlchemyCandleIngestionRepository(sessions),
         )
         for symbol in settings.scheduled_symbols:
             scheduler.add_job(

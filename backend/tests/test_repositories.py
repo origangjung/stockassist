@@ -16,7 +16,7 @@ from app.adapters.broker import BrokerAdapter
 from app.indicators import IndicatorEngine
 from app.services.backtest import BacktestService
 from app.services.score import ScoreService
-from app.prediction import XGBoostPredictionEngine
+from app.prediction import LightweightPredictionEngine
 from app.repositories.sqlalchemy import SqlAlchemyPredictionRepository
 from app.services.model_registry import ModelRegistryService
 from app.score import ScoreEngine, TechnicalScoreCalculator
@@ -33,14 +33,35 @@ def test_sqlalchemy_repositories_upsert_and_read(tmp_path):
     quality = SqlAlchemyQualityLogRepository(sessions)
 
     stocks.upsert(stock)
-    candles.save_many("005930", source, interval="1d", stage="raw", aggregation_version="raw")
-    candles.save_many("005930", source, interval="1d", stage="raw", aggregation_version="raw")
+    candles.save_many(
+        "005930",
+        source,
+        interval="1d",
+        stage="raw",
+        aggregation_version="raw",
+        source_provider="mock",
+        price_basis_rule_version="mock-candles-v1",
+    )
+    candles.save_many(
+        "005930",
+        source,
+        interval="1d",
+        stage="raw",
+        aggregation_version="raw",
+        source_provider="mock",
+        price_basis_rule_version="mock-candles-v1",
+    )
     quality.save_many("005930", [DataQualityLog("golden", QualitySeverity.WARNING, "test")])
 
     stored = candles.find("005930", interval="1d", stage="raw", limit=10)
     assert len(stored) == 3
     assert stored[-1].close == source[-1].close
     assert stored[-1].price_basis == "unadjusted"
+    inventory = candles.price_basis_inventory(symbol="005930")
+    assert inventory.total_candles == 3
+    assert inventory.unknown_candles == 0
+    assert inventory.rows[0].source_provider == "mock"
+    assert inventory.rows[0].price_basis_rule_version == "mock-candles-v1"
 
     result = BacktestEngine().run(
         source, BuyAndHoldStrategy(), BacktestConfig(costs=CostModel(0, 0, 0))
@@ -77,6 +98,10 @@ def test_sqlalchemy_repositories_upsert_and_read(tmp_path):
     assert history[0].engine == "vectorized"
     detail = backtests.get_run(persisted["run_id"])
     assert detail is not None
+    assert detail.config["market_data_adjustment"]["mode"] == "none"
+    assert detail.config["market_data_adjustment"]["input_price_basis_policy"]["rule_version"] == (
+        "mock-candles-v1"
+    )
     assert detail.summary.run_id == persisted["run_id"]
     assert detail.trades
     assert backtests.get_run("missing") is None
@@ -91,14 +116,15 @@ def test_sqlalchemy_repositories_upsert_and_read(tmp_path):
     assert scored["weight_version"] == "weights-test"
 
     prediction_repository = SqlAlchemyPredictionRepository(sessions)
-    prediction = XGBoostPredictionEngine().predict(
+    prediction_engine = LightweightPredictionEngine()
+    prediction = prediction_engine.predict(
         "005930",
         provider.get_candles("005930", 180),
         horizon_days=5,
     )
     challenger = replace(prediction, model_version=f"{prediction.model_version}-next")
-    prediction_repository.save(prediction, algorithm="xgboost")
-    prediction_repository.save(challenger, algorithm="xgboost")
+    prediction_repository.save(prediction, algorithm=prediction_engine.algorithm)
+    prediction_repository.save(challenger, algorithm=prediction_engine.algorithm)
     registry = ModelRegistryService(prediction_repository)
     registry.promote(prediction.model_version)
     promoted = registry.promote(challenger.model_version)

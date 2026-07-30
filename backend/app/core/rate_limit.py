@@ -2,6 +2,7 @@ from collections import OrderedDict, deque
 from collections.abc import Callable
 from datetime import datetime, timezone
 from hashlib import sha256
+from ipaddress import ip_address
 from threading import Lock
 from time import monotonic, time
 from uuid import uuid4
@@ -23,6 +24,31 @@ _EXPENSIVE_SUFFIXES = (
     "/disclosures",
     "/investor-flow",
 )
+_MAX_CLIENT_IP_HEADER_LENGTH = 64
+_MAX_CLIENT_KEY_LENGTH = 64
+
+
+def client_ip_key(request: Request, *, trust_proxy_headers: bool) -> str:
+    """Return a bounded client key, trusting a proxy-provided IP only when enabled.
+
+    Nginx overwrites ``X-Real-IP`` before forwarding a request to the API.  The
+    application must still treat that header as untrusted unless the deployment
+    explicitly opts in, and must not turn arbitrary header text into an
+    unbounded limiter key.
+    """
+
+    if trust_proxy_headers:
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip is not None and len(real_ip) <= _MAX_CLIENT_IP_HEADER_LENGTH:
+            candidate = real_ip.strip()
+            if candidate and "%" not in candidate:
+                try:
+                    return str(ip_address(candidate))
+                except ValueError:
+                    pass
+
+    client_host = request.client.host if request.client else "unknown"
+    return client_host[:_MAX_CLIENT_KEY_LENGTH]
 
 _REDIS_SLIDING_WINDOW_SCRIPT = """
 local key = KEYS[1]
@@ -272,11 +298,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
     def _client_key(self, request: Request) -> str:
-        if self._trust_proxy_headers:
-            real_ip = request.headers.get("X-Real-IP", "").strip()
-            if real_ip:
-                return real_ip[:64]
-        return request.client.host if request.client else "unknown"
+        return client_ip_key(request, trust_proxy_headers=self._trust_proxy_headers)
 
     @staticmethod
     def _error_response(
@@ -310,11 +332,27 @@ def _is_expensive(request: Request) -> bool:
         "/api/v1/admin/backtests/compare",
         "/api/v1/admin/backtests/strategies/compare",
     }
-    expensive_ingestion = request.method == "POST" and path.startswith(
-        "/api/v1/admin/ingestion/"
+    expensive_ingestion = request.method == "POST" and path.startswith("/api/v1/admin/ingestion/")
+    expensive_corporate_action_ingestion = request.method == "POST" and path.startswith(
+        "/api/v1/admin/corporate-actions/ingestion/"
+    )
+    expensive_corporate_action_candidates = request.method == "GET" and path.startswith(
+        "/api/v1/admin/corporate-actions/candidates/"
+    )
+    expensive_corporate_action_approval = request.method == "POST" and path.startswith(
+        "/api/v1/admin/corporate-actions/approvals/"
+    )
+    expensive_model_promotion = (
+        request.method == "POST"
+        and path.startswith("/api/v1/admin/models/")
+        and path.endswith("/promote")
     )
     return (
         (request.method == "POST" and path in expensive_posts)
         or expensive_ingestion
+        or expensive_corporate_action_ingestion
+        or expensive_corporate_action_candidates
+        or expensive_corporate_action_approval
+        or expensive_model_promotion
         or path.endswith(_EXPENSIVE_SUFFIXES)
     )

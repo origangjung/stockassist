@@ -1,5 +1,5 @@
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from app.api.schemas import (
@@ -8,6 +8,7 @@ from app.api.schemas import (
     BacktestRequest,
     BacktestStrategyComparisonRequest,
     BacktestValidationRequest,
+    CorporateActionApprovalRequest,
     PriceAlertCreateRequest,
     WatchlistCreateRequest,
 )
@@ -16,6 +17,17 @@ from app.core.compliance import compliance_metadata
 from app.core.request_context import current_request_id
 from app.providers.mock import UnknownSymbolError
 from app.pipeline.candles import CandleInterval
+from app.corporate_actions import (
+    CorporateActionIngestionUnavailableError,
+    CorporateActionAdjustmentUnavailableError,
+    CorporateActionRevisionConflictError,
+    CorporateActionSourceNotFoundError,
+    UntrustedCorporateActionSourceError,
+)
+from app.corporate_actions.approval_contracts import (
+    CorporateActionApprovalConflictError,
+    CorporateActionApprovalUnavailableError,
+)
 from app.services.market import MarketDataService
 from app.services.backtest import (
     BacktestHistoryUnavailableError,
@@ -30,6 +42,7 @@ from app.services.content import DisclosureAnalysisService, NewsAnalysisService
 from app.services.investor_flow import InvestorFlowService
 from app.services.prediction import PredictionService
 from app.services.model_registry import (
+    ModelArtifactValidationError,
     ModelRegistryService,
     ModelRegistryUnavailableError,
     ModelVersionNotFoundError,
@@ -42,13 +55,19 @@ from app.services.alerts import (
 )
 from app.services.operations import OperationsStatusService
 from app.services.data_quality import DataQualityHistoryService
+from app.services.candle_inventory import CandlePriceBasisInventoryService
 from app.services.provider_audit import (
     ProviderAuditHistoryService,
     ProviderAuditMaintenanceService,
 )
 from app.services.ingestion import IngestionOperationsService, IngestionUnavailableError
 from app.services.data_lifecycle import DataLifecycleMaintenanceService
-from app.services.corporate_actions import CorporateActionService
+from app.services.corporate_actions import (
+    CorporateActionApprovalService,
+    CorporateActionCandidateService,
+    CorporateActionIngestionService,
+    CorporateActionService,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["market-data"])
 
@@ -149,6 +168,12 @@ def get_data_quality_history_service() -> DataQualityHistoryService:
     return data_quality_history_service
 
 
+def get_candle_price_basis_inventory_service() -> CandlePriceBasisInventoryService:
+    from app.main import candle_price_basis_inventory_service
+
+    return candle_price_basis_inventory_service
+
+
 def get_provider_audit_history_service() -> ProviderAuditHistoryService:
     from app.main import provider_audit_history_service
 
@@ -171,6 +196,24 @@ def get_corporate_action_service() -> CorporateActionService:
     from app.main import corporate_action_service
 
     return corporate_action_service
+
+
+def get_corporate_action_ingestion_service() -> CorporateActionIngestionService:
+    from app.main import corporate_action_ingestion_service
+
+    return corporate_action_ingestion_service
+
+
+def get_corporate_action_candidate_service() -> CorporateActionCandidateService:
+    from app.main import corporate_action_candidate_service
+
+    return corporate_action_candidate_service
+
+
+def get_corporate_action_approval_service() -> CorporateActionApprovalService:
+    from app.main import corporate_action_approval_service
+
+    return corporate_action_approval_service
 
 
 def get_ingestion_operations_service() -> IngestionOperationsService:
@@ -428,10 +471,15 @@ def run_backtest(
                 slippage_rate=request.slippage_rate,
                 engine_name=request.engine,
                 max_volume_participation=request.max_volume_participation,
+                corporate_action_mode=request.corporate_action_mode,
             )
         )
     except UnknownSymbolError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CorporateActionAdjustmentUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post(
@@ -461,10 +509,15 @@ def validate_backtest_walk_forward(
                 n_splits=request.n_splits,
                 warmup_candles=request.warmup_candles,
                 max_volume_participation=request.max_volume_participation,
+                corporate_action_mode=request.corporate_action_mode,
             )
         )
     except UnknownSymbolError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CorporateActionAdjustmentUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get(
@@ -500,6 +553,20 @@ def get_data_quality_history(
             severity=severity,
         )
     )
+
+
+@router.get(
+    "/admin/candles/price-basis-inventory",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-pipeline"],
+    dependencies=[Depends(require_admin_access)],
+)
+def get_candle_price_basis_inventory(
+    symbol: str = Query(pattern=r"^[0-9A-Z.-]{1,16}$"),
+    limit: int = Query(default=200, ge=1, le=500),
+    service: CandlePriceBasisInventoryService = Depends(get_candle_price_basis_inventory_service),
+):
+    return envelope(service.summarize(symbol=symbol, limit=limit))
 
 
 @router.get(
@@ -599,6 +666,145 @@ def get_corporate_action_history(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get(
+    "/admin/corporate-actions/ingestion",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-pipeline"],
+    dependencies=[Depends(require_admin_access)],
+)
+def get_corporate_action_ingestion_status(
+    service: CorporateActionIngestionService = Depends(get_corporate_action_ingestion_service),
+):
+    return envelope(service.status())
+
+
+@router.get(
+    "/admin/corporate-actions/candidates",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-pipeline"],
+    dependencies=[Depends(require_admin_access)],
+)
+def get_corporate_action_candidate_status(
+    service: CorporateActionCandidateService = Depends(get_corporate_action_candidate_service),
+):
+    return envelope(service.status())
+
+
+@router.get(
+    "/admin/corporate-actions/candidates/{source}/{symbol}",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-pipeline"],
+    dependencies=[Depends(require_admin_access)],
+)
+def preview_corporate_action_candidates(
+    source: str = Path(pattern=r"^[a-z0-9_-]{1,32}$"),
+    symbol: str = Path(pattern=r"^[0-9A-Z.-]{1,16}$"),
+    start: date = Query(),
+    end: date = Query(),
+    limit: int = Query(default=100, ge=1, le=200),
+    service: CorporateActionCandidateService = Depends(get_corporate_action_candidate_service),
+):
+    try:
+        return envelope(
+            service.preview(
+                source,
+                symbol,
+                start=start,
+                end=end,
+                limit=limit,
+            )
+        )
+    except CorporateActionSourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get(
+    "/admin/corporate-actions/approvals",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-pipeline"],
+    dependencies=[Depends(require_admin_access)],
+)
+def get_corporate_action_approval_status(
+    service: CorporateActionApprovalService = Depends(get_corporate_action_approval_service),
+):
+    return envelope(service.status())
+
+
+@router.post(
+    "/admin/corporate-actions/approvals/{source}/{symbol}",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-pipeline"],
+    dependencies=[Depends(require_admin_access)],
+)
+def approve_corporate_action_candidate(
+    request: CorporateActionApprovalRequest,
+    source: str = Path(pattern=r"^[a-z0-9_-]{1,32}$"),
+    symbol: str = Path(pattern=r"^[0-9A-Z.-]{1,16}$"),
+    service: CorporateActionApprovalService = Depends(get_corporate_action_approval_service),
+):
+    try:
+        return envelope(
+            service.approve(
+                source,
+                symbol,
+                start=request.start,
+                end=request.end,
+                group_hint=request.group_hint,
+                receipt_no=request.receipt_no,
+                effective_at=request.effective_at,
+                exchange_evidence_url=request.exchange_evidence_url,
+                confirmation=request.confirmation,
+            )
+        )
+    except CorporateActionApprovalUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except CorporateActionSourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CorporateActionApprovalConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post(
+    "/admin/corporate-actions/ingestion/{source}/{symbol}",
+    response_model=ApiEnvelope,
+    tags=["admin", "operations", "data-pipeline"],
+    dependencies=[Depends(require_admin_access)],
+)
+def trigger_corporate_action_ingestion(
+    source: str = Path(pattern=r"^[a-z0-9_-]{1,32}$"),
+    symbol: str = Path(pattern=r"^[0-9A-Z.-]{1,16}$"),
+    start: datetime = Query(),
+    end: datetime = Query(),
+    limit: int = Query(default=200, ge=1, le=500),
+    service: CorporateActionIngestionService = Depends(get_corporate_action_ingestion_service),
+):
+    try:
+        return envelope(
+            service.ingest(
+                source,
+                symbol,
+                start=start,
+                end=end,
+                limit=limit,
+            )
+        )
+    except CorporateActionIngestionUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except CorporateActionSourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (
+        CorporateActionRevisionConflictError,
+        UntrustedCorporateActionSourceError,
+    ) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post(
     "/admin/ingestion/{symbol}",
     response_model=ApiEnvelope,
@@ -658,10 +864,15 @@ def compare_backtest_engines(
                 tax_rate=request.tax_rate,
                 slippage_rate=request.slippage_rate,
                 max_volume_participation=request.max_volume_participation,
+                corporate_action_mode=request.corporate_action_mode,
             )
         )
     except UnknownSymbolError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CorporateActionAdjustmentUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post(
@@ -689,10 +900,15 @@ def compare_backtest_strategies(
                 tax_rate=request.tax_rate,
                 slippage_rate=request.slippage_rate,
                 max_volume_participation=request.max_volume_participation,
+                corporate_action_mode=request.corporate_action_mode,
             )
         )
     except UnknownSymbolError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except CorporateActionAdjustmentUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get(
@@ -754,6 +970,8 @@ def promote_model_version(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ModelVersionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ModelArtifactValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get(

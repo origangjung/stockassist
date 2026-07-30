@@ -43,6 +43,15 @@ class StockCandleModel(Base):
             name="uq_stock_candle_identity",
         ),
         Index("ix_stock_candles_lookup", "symbol", "interval", "data_stage", "timestamp"),
+        Index(
+            "ix_stock_candles_price_basis_inventory",
+            "symbol",
+            "source_provider",
+            "price_basis",
+            "price_basis_rule_version",
+            "data_stage",
+            "interval",
+        ),
     )
 
     id: Mapped[int] = mapped_column(
@@ -55,6 +64,12 @@ class StockCandleModel(Base):
     aggregation_version: Mapped[str] = mapped_column(String(24), nullable=False, default="raw")
     price_basis: Mapped[str] = mapped_column(
         String(32), nullable=False, default="unknown", server_default="unknown"
+    )
+    source_provider: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="legacy_unknown", server_default="legacy_unknown"
+    )
+    price_basis_rule_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="legacy_unknown", server_default="legacy_unknown"
     )
     open: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     high: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)

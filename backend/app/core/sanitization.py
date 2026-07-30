@@ -11,8 +11,20 @@ _BEARER_VALUE = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/-]+=*")
 _ASSIGNED_SECRET = re.compile(
     r"(?i)\b(token|secret|password|api[_-]?key|client[_-]?id)\s*[:=]\s*[^\s,;&]+"
 )
+_SAFE_PROVIDER_ERROR_CODE = re.compile(r"^[a-z][a-z0-9._-]{0,63}$", re.IGNORECASE)
 
 REDACTED = "[REDACTED]"
+
+
+def public_provider_error_code(value: object, *, fallback: str = "provider-error") -> str:
+    """Return a bounded, credential-free identifier safe for public error paths."""
+
+    if not isinstance(value, str):
+        return fallback
+    candidate = value.strip()
+    if not _SAFE_PROVIDER_ERROR_CODE.fullmatch(candidate) or _SENSITIVE_KEY.search(candidate):
+        return fallback
+    return candidate.lower()
 
 
 def sanitize_external_text(value: object, *, maximum: int = 500) -> str:

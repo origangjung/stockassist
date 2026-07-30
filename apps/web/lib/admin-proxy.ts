@@ -96,6 +96,9 @@ export async function proxyAdminRequest(
       body: options.body,
       headers: {
         "X-Admin-Key": adminKey,
+        ...(process.env.ANALYSIS_API_KEY
+          ? { "X-Analysis-Key": process.env.ANALYSIS_API_KEY }
+          : {}),
         ...(options.body ? { "Content-Type": "application/json" } : {}),
       },
       cache: "no-store",

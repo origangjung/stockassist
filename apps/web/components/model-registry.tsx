@@ -13,6 +13,7 @@ export function ModelRegistryPanel() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [promoting, setPromoting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (filter = "") => {
     setLoading(true);
@@ -36,8 +37,10 @@ export function ModelRegistryPanel() {
   const promote = async (version: string) => {
     setPromoting(version);
     setError(null);
+    setNotice(null);
     try {
-      await promoteModelVersion(version);
+      const result = await promoteModelVersion(version);
+      setNotice(result.notice);
       await load(symbol.trim().toUpperCase());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Champion 승격에 실패했습니다.");
@@ -55,7 +58,8 @@ export function ModelRegistryPanel() {
           <button type="submit">조회</button>
         </form>
       </header>
-      <div className="admin-state"><span>승격은 Registry 메타데이터만 변경하며 런타임 모델을 자동 배포하지 않습니다.</span></div>
+      <div className="admin-state"><span>{registry?.runtime_activation_enabled ? "승격 전 artifact 체크섬과 모델 범위를 검증하고 원자적으로 런타임 포인터를 전환합니다." : "승격은 Registry 메타데이터만 변경합니다. 검증된 artifact 저장소를 설정하기 전에는 런타임 모델을 전환하지 않습니다."}</span></div>
+      {notice && <div className="admin-state"><span>{notice}</span></div>}
       {loading && <div className="admin-state">모델 버전을 불러오는 중입니다.</div>}
       {error && <div className="admin-state error"><b>처리 실패</b><span>{error}</span></div>}
       {!loading && registry?.persistence_status === "disabled" && <div className="admin-state">DB 저장이 비활성화되어 있습니다.</div>}

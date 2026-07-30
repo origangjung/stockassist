@@ -60,13 +60,13 @@ function latestValues(latest: IndicatorPoint) {
 export function TechnicalSnapshot({ symbol, currency }: { symbol: string; currency: string }) {
   const technical = useQuery({
     queryKey: ["technical", symbol],
-    queryFn: () => fetchTechnicalAnalysis(symbol),
+    queryFn: ({ signal }) => fetchTechnicalAnalysis(symbol, signal),
     staleTime: 60_000,
     retry: 1,
   });
   const patterns = useQuery({
     queryKey: ["patterns", symbol],
-    queryFn: () => fetchPatternAnalysis(symbol),
+    queryFn: ({ signal }) => fetchPatternAnalysis(symbol, signal),
     staleTime: 60_000,
     retry: 1,
   });
@@ -76,9 +76,6 @@ export function TechnicalSnapshot({ symbol, currency }: { symbol: string; curren
         .sort((left, right) => right.ended_at.localeCompare(left.ended_at))
         .slice(0, 6)
     : [];
-  const loading = technical.isPending || patterns.isPending;
-  const failed = technical.isError || patterns.isError;
-
   return (
     <section className="technical-snapshot">
       <header>
@@ -86,15 +83,15 @@ export function TechnicalSnapshot({ symbol, currency }: { symbol: string; curren
         <small>EXPERIMENTAL · 계산 결과는 참고 정보입니다.</small>
       </header>
 
-      {loading && <div className="technical-state">기술 계산 결과를 불러오는 중입니다.</div>}
-      {failed && (
-        <div className="technical-state error">
-          <span>기술지표 또는 패턴 결과를 불러오지 못했습니다.</span>
-          <button onClick={() => { void technical.refetch(); void patterns.refetch(); }} type="button">다시 시도</button>
-        </div>
-      )}
-      {!loading && !failed && latest && (
-        <>
+      <section aria-label="기술지표 결과" className="technical-source">
+        {technical.isPending && <div className="technical-state" role="status">기술지표를 불러오는 중입니다.</div>}
+        {technical.isError && (
+          <div className="technical-state error" role="alert">
+            <span>기술지표 결과를 불러오지 못했습니다.</span>
+            <button onClick={() => { void technical.refetch(); }} type="button">기술지표 다시 시도</button>
+          </div>
+        )}
+        {!technical.isPending && !technical.isError && latest && (
           <div className="technical-metrics">
             {latestValues(latest).map((metric) => (
               <article key={metric.label}>
@@ -104,8 +101,21 @@ export function TechnicalSnapshot({ symbol, currency }: { symbol: string; curren
               </article>
             ))}
           </div>
+        )}
+        {!technical.isPending && !technical.isError && !latest && <div className="technical-state" role="status">계산 가능한 기술지표가 없습니다.</div>}
+      </section>
+
+      <section aria-label="차트 패턴 결과" className="technical-source technical-pattern-source">
+        {patterns.isPending && <div className="technical-state" role="status">차트 패턴을 불러오는 중입니다.</div>}
+        {patterns.isError && (
+          <div className="technical-state error" role="alert">
+            <span>차트 패턴 결과를 불러오지 못했습니다.</span>
+            <button onClick={() => { void patterns.refetch(); }} type="button">패턴 다시 시도</button>
+          </div>
+        )}
+        {!patterns.isPending && !patterns.isError && patterns.data && (
           <div className="pattern-strip">
-            <div><b>최근 감지 패턴</b><span>{patterns.data?.engine_version}</span></div>
+            <div><b>최근 감지 패턴</b><span>{patterns.data.engine_version}</span></div>
             {detected.length === 0 && <p>현재 분석 구간에서 감지된 패턴이 없습니다.</p>}
             {detected.map((pattern) => (
               <article className={pattern.direction} key={`${pattern.name}-${pattern.ended_at}`}>
@@ -115,13 +125,18 @@ export function TechnicalSnapshot({ symbol, currency }: { symbol: string; curren
               </article>
             ))}
           </div>
+        )}
+        {!patterns.isPending && !patterns.isError && !patterns.data && <div className="technical-state" role="status">표시할 패턴 결과가 없습니다.</div>}
+      </section>
+
+      {latest && technical.data && (
+        <>
           <footer>
-            <span>{technical.data?.provider} · {technical.data?.engine_version}</span>
+            <span>{technical.data.provider} · {technical.data.engine_version}</span>
             <span>기준 {new Date(latest.timestamp).toLocaleString("ko-KR")}</span>
           </footer>
         </>
       )}
-      {!loading && !failed && !latest && <div className="technical-state">계산 가능한 기술지표가 없습니다.</div>}
     </section>
   );
 }

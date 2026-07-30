@@ -3,7 +3,13 @@ from datetime import datetime, timezone
 
 from app.pipeline.candles import DataQualityLog
 from app.providers.contracts import Candle, StockInfo
-from app.repositories.contracts import CandleRepository, QualityLogRepository, StockRepository
+from app.repositories.contracts import (
+    CandlePriceBasisInventory,
+    CandlePriceBasisInventoryRow,
+    CandleRepository,
+    QualityLogRepository,
+    StockRepository,
+)
 from app.financials.contracts import FinancialSnapshot
 from app.repositories.contracts import FinancialRepository
 from app.disclosures.contracts import Disclosure
@@ -29,6 +35,8 @@ class InMemoryStockRepository(StockRepository):
 class InMemoryCandleRepository(CandleRepository):
     def __init__(self):
         self.items: dict[tuple[str, str, str, str], dict[object, Candle]] = {}
+        self.sources: dict[tuple[str, str, str, str], dict[object, str]] = {}
+        self.price_basis_rules: dict[tuple[str, str, str, str], dict[object, str]] = {}
 
     def save_many(
         self,
@@ -38,10 +46,21 @@ class InMemoryCandleRepository(CandleRepository):
         interval: str,
         stage: str,
         aggregation_version: str,
+        source_provider: str,
+        price_basis_rule_version: str,
     ) -> None:
-        bucket = self.items.setdefault((symbol, interval, stage, aggregation_version), {})
+        if not source_provider or len(source_provider) > 32:
+            raise ValueError("Candle source provider must contain 1 to 32 characters")
+        if not price_basis_rule_version or len(price_basis_rule_version) > 32:
+            raise ValueError("Candle price-basis rule version must contain 1 to 32 characters")
+        key = (symbol, interval, stage, aggregation_version)
+        bucket = self.items.setdefault(key, {})
+        sources = self.sources.setdefault(key, {})
+        rules = self.price_basis_rules.setdefault(key, {})
         for candle in candles:
             bucket[candle.timestamp] = candle
+            sources[candle.timestamp] = source_provider
+            rules[candle.timestamp] = price_basis_rule_version
 
     def find(self, symbol: str, *, interval: str, stage: str, limit: int) -> list[Candle]:
         matches: list[Candle] = []
@@ -49,6 +68,57 @@ class InMemoryCandleRepository(CandleRepository):
             if (stored_symbol, stored_interval, stored_stage) == (symbol, interval, stage):
                 matches.extend(values.values())
         return sorted(matches, key=lambda value: value.timestamp)[-limit:]
+
+    def price_basis_inventory(
+        self,
+        *,
+        symbol: str,
+        limit: int = 200,
+    ) -> CandlePriceBasisInventory:
+        groups: dict[tuple[str, str, str, str, str, str], list[object]] = {}
+        for key, values in self.items.items():
+            stored_symbol, interval, stage, aggregation_version = key
+            if stored_symbol != symbol:
+                continue
+            for candle in values.values():
+                source_provider = self.sources.get(key, {}).get(candle.timestamp, "legacy_unknown")
+                rule_version = self.price_basis_rules.get(key, {}).get(
+                    candle.timestamp, "legacy_unknown"
+                )
+                group = (
+                    source_provider,
+                    candle.price_basis,
+                    rule_version,
+                    stage,
+                    interval,
+                    aggregation_version,
+                )
+                groups.setdefault(group, []).append(candle.timestamp)
+        rows = [
+            CandlePriceBasisInventoryRow(
+                source_provider=key[0],
+                price_basis=key[1],
+                price_basis_rule_version=key[2],
+                data_stage=key[3],
+                interval=key[4],
+                aggregation_version=key[5],
+                candle_count=len(timestamps),
+                first_timestamp=min(timestamps),
+                last_timestamp=max(timestamps),
+            )
+            for key, timestamps in sorted(groups.items())
+        ]
+        total = sum(row.candle_count for row in rows)
+        unknown = sum(row.candle_count for row in rows if row.price_basis == "unknown")
+        legacy_unknown = sum(
+            row.candle_count for row in rows if row.source_provider == "legacy_unknown"
+        )
+        legacy_rule = sum(
+            row.candle_count for row in rows if row.price_basis_rule_version == "legacy_unknown"
+        )
+        return CandlePriceBasisInventory(
+            rows[:limit], total, unknown, legacy_unknown, legacy_rule, len(rows)
+        )
 
 
 class InMemoryQualityLogRepository(QualityLogRepository):

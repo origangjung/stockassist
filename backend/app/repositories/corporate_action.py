@@ -1,5 +1,6 @@
+from dataclasses import replace
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_EVEN, Decimal, DecimalException
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -20,38 +21,62 @@ class SqlAlchemyCorporateActionRepository:
         self._sessions = sessions
 
     def save(self, action: CorporateActionRecord) -> None:
-        self._validate(action)
-        with self._sessions.begin() as session:
-            existing = session.scalar(
-                select(CorporateActionModel).where(
-                    CorporateActionModel.source == action.source,
-                    CorporateActionModel.symbol == action.symbol,
-                    CorporateActionModel.event_id == action.event_id,
-                    CorporateActionModel.revision == action.revision,
-                )
-            )
-            if existing is not None:
-                if self._same_revision(existing, action):
-                    return
+        self.save_batch([action])
+
+    def save_batch(self, actions: list[CorporateActionRecord]) -> tuple[int, int]:
+        actions = [self._canonical(action) for action in actions]
+        for action in actions:
+            self._validate(action)
+        unique: dict[tuple[str, str, str, int], CorporateActionRecord] = {}
+        unchanged = 0
+        for action in actions:
+            key = (action.source, action.symbol, action.event_id, action.revision)
+            previous = unique.get(key)
+            if previous is None:
+                unique[key] = action
+            elif self._same_record(previous, action):
+                unchanged += 1
+            else:
                 raise CorporateActionRevisionConflictError(
-                    "Corporate action revision already exists with different values"
+                    "Corporate action batch contains conflicting revision values"
                 )
-            session.add(
-                CorporateActionModel(
-                    symbol=action.symbol,
-                    action_type=action.action_type,
-                    event_id=action.event_id,
-                    revision=action.revision,
-                    effective_at=action.effective_at,
-                    announced_at=action.announced_at,
-                    known_at=action.known_at,
-                    price_factor=action.price_factor,
-                    volume_factor=action.volume_factor,
-                    status=action.status,
-                    source=action.source,
-                    rule_version=action.rule_version,
+
+        created = 0
+        with self._sessions.begin() as session:
+            for action in unique.values():
+                existing = session.scalar(
+                    select(CorporateActionModel).where(
+                        CorporateActionModel.source == action.source,
+                        CorporateActionModel.symbol == action.symbol,
+                        CorporateActionModel.event_id == action.event_id,
+                        CorporateActionModel.revision == action.revision,
+                    )
                 )
-            )
+                if existing is not None:
+                    if self._same_revision(existing, action):
+                        unchanged += 1
+                        continue
+                    raise CorporateActionRevisionConflictError(
+                        "Corporate action revision already exists with different values"
+                    )
+                session.add(
+                    CorporateActionModel(
+                        symbol=action.symbol,
+                        action_type=action.action_type,
+                        event_id=action.event_id,
+                        revision=action.revision,
+                        effective_at=action.effective_at,
+                        announced_at=action.announced_at,
+                        known_at=action.known_at,
+                        price_factor=action.price_factor,
+                        volume_factor=action.volume_factor,
+                        status=action.status,
+                        source=action.source,
+                        rule_version=action.rule_version,
+                    )
+                )
+                created += 1
+        return created, unchanged
 
     def list_known(self, symbol: str, *, as_of: datetime) -> list[CorporateActionRecord]:
         self._require_aware(as_of)
@@ -142,6 +167,28 @@ class SqlAlchemyCorporateActionRepository:
             and model.status == action.status
             and model.rule_version == action.rule_version
         )
+
+    @staticmethod
+    def _same_record(
+        left: CorporateActionRecord,
+        right: CorporateActionRecord,
+    ) -> bool:
+        return replace(left, recorded_at=None) == replace(right, recorded_at=None)
+
+    @staticmethod
+    def _canonical(action: CorporateActionRecord) -> CorporateActionRecord:
+        try:
+            return replace(
+                action,
+                price_factor=action.price_factor.quantize(
+                    Decimal("0.000000000001"), rounding=ROUND_HALF_EVEN
+                ),
+                volume_factor=action.volume_factor.quantize(
+                    Decimal("0.000000000001"), rounding=ROUND_HALF_EVEN
+                ),
+            )
+        except DecimalException as exc:
+            raise ValueError("Corporate action factors exceed persistence precision") from exc
 
     @staticmethod
     def _validate(action: CorporateActionRecord) -> None:

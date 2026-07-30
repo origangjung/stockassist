@@ -12,8 +12,9 @@ from app.backtest import (
     WalkForwardBacktestValidator,
 )
 from app.backtest.models import EquityPoint
-from app.providers.contracts import Capability
 from app.repositories.contracts import BacktestRepository
+from app.services.corporate_actions import CorporateActionService
+from app.corporate_actions import CorporateActionAdjustmentUnavailableError
 
 
 class BacktestService:
@@ -23,12 +24,14 @@ class BacktestService:
         engine: BacktestEngine,
         repository: BacktestRepository | None = None,
         event_engine: EventDrivenBacktestEngine | None = None,
+        corporate_actions: CorporateActionService | None = None,
     ):
         self._broker = broker
         self._engine = engine
         self._event_engine = event_engine or EventDrivenBacktestEngine()
         self._validator = WalkForwardBacktestValidator()
         self._repository = repository
+        self._corporate_actions = corporate_actions
 
     def run(
         self,
@@ -44,10 +47,10 @@ class BacktestService:
         slippage_rate: float,
         engine_name: str = "vectorized",
         max_volume_participation: float = 1.0,
+        corporate_action_mode: str = "none",
     ) -> dict:
         strategy = self._strategy(strategy_name, fast_period, slow_period)
-        provider = self._broker.provider_for(Capability.CANDLES)
-        candles = provider.get_candles(symbol, limit)
+        provider, candles, adjustment = self._load_candles(symbol, limit, corporate_action_mode)
         config = BacktestConfig(
             initial_capital=initial_capital,
             costs=CostModel(commission_rate, tax_rate, slippage_rate),
@@ -56,7 +59,14 @@ class BacktestService:
         engine = self._engine_for(engine_name)
         result = engine.run(candles, strategy, config)
         run_id = (
-            self._repository.save(symbol, config, result) if self._repository is not None else None
+            self._repository.save(
+                symbol,
+                config,
+                result,
+                metadata=adjustment,
+            )
+            if self._repository is not None
+            else None
         )
         return {
             "run_id": run_id,
@@ -64,6 +74,7 @@ class BacktestService:
             "symbol": symbol,
             "provider": provider.name,
             "engine": engine_name,
+            "corporate_action_adjustment": adjustment,
             **asdict(result),
         }
 
@@ -83,9 +94,9 @@ class BacktestService:
         n_splits: int,
         warmup_candles: int,
         max_volume_participation: float = 1.0,
+        corporate_action_mode: str = "none",
     ) -> dict:
-        provider = self._broker.provider_for(Capability.CANDLES)
-        candles = provider.get_candles(symbol, limit)
+        provider, candles, adjustment = self._load_candles(symbol, limit, corporate_action_mode)
         config = BacktestConfig(
             initial_capital=initial_capital,
             costs=CostModel(commission_rate, tax_rate, slippage_rate),
@@ -108,6 +119,7 @@ class BacktestService:
             "symbol": symbol,
             "provider": provider.name,
             "engine": engine_name,
+            "corporate_action_adjustment": adjustment,
             **result,
         }
 
@@ -124,10 +136,10 @@ class BacktestService:
         tax_rate: float,
         slippage_rate: float,
         max_volume_participation: float = 1.0,
+        corporate_action_mode: str = "none",
     ) -> dict:
         """Run both engines against one immutable market-data snapshot."""
-        provider = self._broker.provider_for(Capability.CANDLES)
-        candles = provider.get_candles(symbol, limit)
+        provider, candles, adjustment = self._load_candles(symbol, limit, corporate_action_mode)
         config = BacktestConfig(
             initial_capital=initial_capital,
             costs=CostModel(commission_rate, tax_rate, slippage_rate),
@@ -155,6 +167,7 @@ class BacktestService:
             "validation_status": "experimental",
             "symbol": symbol,
             "provider": provider.name,
+            "corporate_action_adjustment": adjustment,
             "strategy": vectorized.strategy,
             "data_as_of": candles[-1].timestamp,
             "assumptions": {
@@ -223,10 +236,10 @@ class BacktestService:
         tax_rate: float,
         slippage_rate: float,
         max_volume_participation: float = 1.0,
+        corporate_action_mode: str = "none",
     ) -> dict:
         """Compare every supported strategy on one market-data snapshot."""
-        provider = self._broker.provider_for(Capability.CANDLES)
-        candles = provider.get_candles(symbol, limit)
+        provider, candles, adjustment = self._load_candles(symbol, limit, corporate_action_mode)
         config = BacktestConfig(
             initial_capital=initial_capital,
             costs=CostModel(commission_rate, tax_rate, slippage_rate),
@@ -275,8 +288,7 @@ class BacktestService:
                         "rejected_order_count": event_counts["rejected"],
                     },
                     "deltas_vs_buy_and_hold": {
-                        key: round(metrics[key] - benchmark_metrics[key], 8)
-                        for key in metric_keys
+                        key: round(metrics[key] - benchmark_metrics[key], 8) for key in metric_keys
                     },
                 }
             )
@@ -286,6 +298,7 @@ class BacktestService:
             "validation_status": "experimental",
             "symbol": symbol,
             "provider": provider.name,
+            "corporate_action_adjustment": adjustment,
             "engine": engine_name,
             "engine_version": engine.version,
             "data_as_of": candles[-1].timestamp,
@@ -347,6 +360,72 @@ class BacktestService:
         if engine_name == "event_driven":
             return self._event_engine
         raise ValueError(f"unsupported backtest engine: {engine_name}")
+
+    def _load_candles(
+        self,
+        symbol: str,
+        limit: int,
+        corporate_action_mode: str,
+    ):
+        batch = self._broker.candles(symbol, limit)
+        provider = batch.provider
+        candles = batch.candles
+        if not candles:
+            raise ValueError("Backtest requires at least one candle")
+        input_bases = sorted({candle.price_basis for candle in candles})
+        input_policy = {
+            "provider": provider.name,
+            "expected_basis": batch.policy.expected_basis,
+            "verification_status": batch.policy.verification_status,
+            "rule_version": batch.policy.rule_version,
+        }
+        if corporate_action_mode == "none":
+            return (
+                provider,
+                candles,
+                {
+                    "mode": "none",
+                    "enabled": False,
+                    "input_price_bases": input_bases,
+                    "input_price_basis_policy": input_policy,
+                    "raw_candles_mutated": False,
+                },
+            )
+        if corporate_action_mode != "forward_point_in_time":
+            raise ValueError("Unsupported corporate action adjustment mode")
+        if self._corporate_actions is None:
+            raise CorporateActionAdjustmentUnavailableError(
+                "Corporate action backtest adjustment is unavailable"
+            )
+        as_of = max(candle.timestamp for candle in candles)
+        result = self._corporate_actions.backtest_view(symbol, candles, as_of=as_of)
+        return (
+            provider,
+            result.candles,
+            {
+                "mode": "forward_point_in_time",
+                "enabled": True,
+                "data_as_of": result.data_as_of,
+                "adjustment_version": result.adjustment_version,
+                "adjustment_direction": result.adjustment_direction,
+                "look_ahead_safe": result.look_ahead_safe,
+                "input_price_bases": input_bases,
+                "input_price_basis_policy": input_policy,
+                "output_price_basis": result.output_price_basis,
+                "raw_candles_mutated": result.raw_candles_mutated,
+                "applied_actions": [
+                    {
+                        "source": action.source,
+                        "event_id": action.event_id,
+                        "revision": action.revision,
+                        "effective_at": action.effective_at,
+                        "known_at": action.known_at,
+                        "rule_version": action.rule_version,
+                    }
+                    for action in result.applied_actions
+                ],
+            },
+        )
 
     def history(
         self,

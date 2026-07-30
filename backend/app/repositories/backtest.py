@@ -29,13 +29,21 @@ class SqlAlchemyBacktestRepository(BacktestRepository):
     def __init__(self, sessions: sessionmaker[Session]):
         self._sessions = sessions
 
-    def save(self, symbol: str, config: BacktestConfig, result: BacktestResult) -> str:
+    def save(
+        self,
+        symbol: str,
+        config: BacktestConfig,
+        result: BacktestResult,
+        *,
+        metadata: dict[str, object] | None = None,
+    ) -> str:
         now = datetime.now(timezone.utc)
         engine = "event_driven" if result.events else "vectorized"
         config_payload = {
             **_json_safe(asdict(config)),
             "engine": engine,
             "engine_version": result.engine_version,
+            "market_data_adjustment": _json_safe(metadata or {"mode": "none"}),
         }
         run = BacktestRunModel(
             symbol=symbol,

@@ -31,6 +31,24 @@ function movingAverage(candles: MarketCandle[], period: number): LineData<Time>[
   return output;
 }
 
+function chartDescription(candles: MarketCandle[]): string {
+  const first = candles[0];
+  const latest = candles.at(-1);
+  if (!first || !latest) return "표시할 차트 데이터가 없습니다.";
+
+  const startClose = Number(first.close);
+  const latestClose = Number(latest.close);
+  const change = startClose ? ((latestClose - startClose) / startClose) * 100 : null;
+  const formattedLatest = Number.isFinite(latestClose)
+    ? new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(latestClose)
+    : latest.close;
+  const changeText = change != null && Number.isFinite(change)
+    ? `시작 대비 ${change >= 0 ? "+" : ""}${change.toFixed(2)}%`
+    : "시작 대비 변동률을 계산할 수 없음";
+
+  return `${first.timestamp.slice(0, 10)}부터 ${latest.timestamp.slice(0, 10)}까지 ${candles.length}개 캔들입니다. 최신 종가 ${formattedLatest}, ${changeText}. 이동평균 5·20과 거래량을 함께 표시합니다.`;
+}
+
 export function StockChart({ candles }: { candles: MarketCandle[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -41,11 +59,11 @@ export function StockChart({ candles }: { candles: MarketCandle[] }) {
     const chart = createChart(container, {
       width: container.clientWidth,
       height: 430,
-      layout: { background: { type: ColorType.Solid, color: "#0b1525" }, textColor: "#8fa0b7" },
-      grid: { vertLines: { color: "#15243a" }, horzLines: { color: "#15243a" } },
-      rightPriceScale: { borderColor: "#283a54", scaleMargins: { top: 0.08, bottom: 0.25 } },
-      timeScale: { borderColor: "#283a54", timeVisible: false },
-      crosshair: { vertLine: { color: "#557aa6" }, horzLine: { color: "#557aa6" } },
+      layout: { background: { type: ColorType.Solid, color: "#15110f" }, textColor: "#b7a998" },
+      grid: { vertLines: { color: "#2b231d" }, horzLines: { color: "#2b231d" } },
+      rightPriceScale: { borderColor: "#46392d", scaleMargins: { top: 0.08, bottom: 0.25 } },
+      timeScale: { borderColor: "#46392d", timeVisible: false },
+      crosshair: { vertLine: { color: "#89684b" }, horzLine: { color: "#89684b" } },
     });
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#27d6a1",
@@ -55,14 +73,14 @@ export function StockChart({ candles }: { candles: MarketCandle[] }) {
       borderVisible: false,
     });
     const ma5Series = chart.addSeries(LineSeries, {
-      color: "#72b8ff",
+      color: "#d59a5d",
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
       title: "MA 5",
     });
     const ma20Series = chart.addSeries(LineSeries, {
-      color: "#f3cb66",
+      color: "#9ec493",
       lineWidth: 2,
       priceLineVisible: false,
       lastValueVisible: false,
@@ -108,7 +126,12 @@ export function StockChart({ candles }: { candles: MarketCandle[] }) {
   return (
     <div className="chart-with-legend">
       <div className="chart-legend"><span className="ma5">MA 5</span><span className="ma20">MA 20</span><span className="volume">거래량</span></div>
-      <div ref={containerRef} className="chart-canvas" aria-label="종목 캔들, 이동평균 및 거래량 차트" />
+      <div
+        aria-label={chartDescription(candles)}
+        className="chart-canvas"
+        ref={containerRef}
+        role="img"
+      />
     </div>
   );
 }

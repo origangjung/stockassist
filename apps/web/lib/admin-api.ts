@@ -231,6 +231,7 @@ export interface ModelVersion {
 
 export interface ModelRegistryData {
   persistence_status: "enabled" | "disabled";
+  runtime_activation_enabled: boolean;
   items: ModelVersion[];
   total: number;
   limit: number;
@@ -394,6 +395,43 @@ export interface DataQualityHistory {
   offset: number;
 }
 
+export type CandlePriceBasis =
+  | "unknown"
+  | "unadjusted"
+  | "provider_adjusted"
+  | "point_in_time_adjusted";
+
+export interface CandlePriceBasisInventoryItem {
+  source_provider: string;
+  price_basis: CandlePriceBasis;
+  price_basis_rule_version: string;
+  data_stage: string;
+  interval: string;
+  aggregation_version: string;
+  candle_count: number;
+  first_timestamp: string;
+  last_timestamp: string;
+  review_status: "evidence_required" | "evidence_recorded";
+  required_evidence: string[];
+}
+
+export interface CandlePriceBasisInventory {
+  persistence_status: "enabled" | "disabled";
+  symbol: string;
+  items: CandlePriceBasisInventoryItem[];
+  total_candles: number;
+  unknown_candles: number;
+  legacy_unknown_candles: number;
+  legacy_rule_candles: number;
+  total_groups: number;
+  review_ready_groups: number;
+  blocked_review_groups: number;
+  groups_truncated: boolean;
+  classification_blockers?: string[];
+  automatic_relabel: false;
+  mutation_performed: false;
+}
+
 export type ProviderAuditOutcome = "success" | "error" | "transport_error";
 
 export interface ProviderAuditItem {
@@ -476,6 +514,130 @@ export interface CorporateActionHistory {
   raw_candles_mutated: false;
 }
 
+export interface CorporateActionSource {
+  name: string;
+  markets: string[];
+  trust_status: "experimental" | "verified" | "disabled";
+  revision_strategy: string;
+}
+
+export interface CorporateActionIngestionStatus {
+  persistence_status: "enabled" | "disabled";
+  ingestion_available: boolean;
+  sources: CorporateActionSource[];
+  source_candidates: CorporateActionSource[];
+  verified_source_count: number;
+  automatic_ingestion: false;
+  consumer_adjustment_mode: "opt_in_disabled";
+  max_batch_records: number;
+}
+
+export interface CorporateActionIngestionResult {
+  source: string;
+  symbol: string;
+  requested_start: string;
+  requested_end: string;
+  data_as_of: string;
+  fetched: number;
+  created: number;
+  unchanged: number;
+  atomic_batch: true;
+  consumer_adjustment_mode: "opt_in_disabled";
+}
+
+export interface CorporateActionCandidateStatus {
+  available: boolean;
+  sources: CorporateActionSource[];
+  read_only: true;
+  automatic_confirmation: false;
+  point_in_time_eligible: false;
+  max_range_days: number;
+  max_candidates: number;
+}
+
+export interface CorporateActionCandidateItem {
+  source: string;
+  symbol: string;
+  event_id: string;
+  receipt_no: string;
+  action_type: string;
+  filed_on: string;
+  decision_date: string | null;
+  record_date: string | null;
+  proposed_price_factor: number | string | null;
+  proposed_volume_factor: number | string | null;
+  evidence_url: string;
+  report_name: string | null;
+  remarks: string | null;
+  correction_hint: boolean;
+  superseded_hint: boolean;
+  warnings: string[];
+  confirmation_ready: false;
+}
+
+export interface CorporateActionCandidatePreview {
+  source: string;
+  symbol: string;
+  requested_start: string;
+  requested_end: string;
+  data_as_of: string;
+  items: CorporateActionCandidateItem[];
+  revision_groups: Array<{
+    group_hint: string;
+    source: string;
+    symbol: string;
+    action_type: string;
+    anchor_date: string | null;
+    receipt_nos: string[];
+    suggested_revisions: number[];
+    confidence: "isolated" | "likely_correction" | "ambiguous_multiple_receipts";
+    reasons: string[];
+    requires_manual_confirmation: true;
+    persistence_allowed: false;
+  }>;
+  count: number;
+  read_only: true;
+  write_performed: false;
+  automatic_confirmation: false;
+  point_in_time_eligible: false;
+}
+
+export interface CorporateActionApprovalStatus {
+  enabled: boolean;
+  available: boolean;
+  persistence_status: "enabled" | "disabled";
+  confirmation_phrase: "CONFIRM_CORPORATE_ACTION";
+  candidate_refetch_required: true;
+  supported_sources: string[];
+  exchange_evidence_required: true;
+  allowed_exchange_evidence_hosts: string[];
+  known_at_policy: "approval_time";
+  bulk_approval: false;
+  automatic_execution: false;
+  raw_candles_mutated: false;
+  exchange_verification: Record<string, unknown>;
+}
+
+export interface CorporateActionApprovalRequest {
+  start: string;
+  end: string;
+  group_hint: string;
+  receipt_no: string;
+  effective_at: string;
+  exchange_evidence_url: string;
+  confirmation: "CONFIRM_CORPORATE_ACTION";
+}
+
+export interface CorporateActionApprovalResult {
+  action: CorporateActionItem;
+  evidence_hash: string;
+  created: boolean;
+  candidate_refetched_at: string;
+  known_at_policy: "approval_time";
+  automatic_execution: false;
+  raw_candles_mutated: false;
+}
+
 export interface IngestionStatus {
   scheduler_enabled: boolean;
   persistence_enabled: boolean;
@@ -493,6 +655,9 @@ export interface IngestionResult {
     cleaned_count: number;
     quality_log_count: number;
     aggregation_version: string;
+    price_basis: CandlePriceBasis;
+    price_basis_rule_version: string;
+    price_basis_verification_status: "unverified" | "verified" | "synthetic";
   };
   configured_symbol: boolean;
   triggered_at: string;
@@ -564,7 +729,7 @@ export function fetchModelVersions(symbol = ""): Promise<ModelRegistryData> {
 
 export function promoteModelVersion(version: string): Promise<{
   model: ModelVersion;
-  runtime_activation: false;
+  runtime_activation: boolean;
   notice: string;
 }> {
   return request(`/api/admin/models/${encodeURIComponent(version)}/promote`, {
@@ -638,6 +803,16 @@ export function fetchDataQualityHistory(
   return request<DataQualityHistory>(`/api/admin/data-quality?${params}`);
 }
 
+export function fetchCandlePriceBasisInventory(
+  symbol: string,
+  limit = 200,
+): Promise<CandlePriceBasisInventory> {
+  const params = new URLSearchParams({ symbol, limit: String(limit) });
+  return request<CandlePriceBasisInventory>(
+    `/api/admin/candles/price-basis-inventory?${params}`,
+  );
+}
+
 export function fetchCorporateActionHistory(
   symbol: string,
   limit: number,
@@ -646,6 +821,60 @@ export function fetchCorporateActionHistory(
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (symbol) params.set("symbol", symbol);
   return request<CorporateActionHistory>(`/api/admin/corporate-actions?${params}`);
+}
+
+export function fetchCorporateActionIngestionStatus(): Promise<CorporateActionIngestionStatus> {
+  return request<CorporateActionIngestionStatus>("/api/admin/corporate-actions/ingestion");
+}
+
+export function triggerCorporateActionIngestion(
+  source: string,
+  symbol: string,
+  start: string,
+  end: string,
+  limit = 200,
+): Promise<CorporateActionIngestionResult> {
+  const params = new URLSearchParams({ start, end, limit: String(limit) });
+  return request<CorporateActionIngestionResult>(
+    `/api/admin/corporate-actions/ingestion/${encodeURIComponent(source)}/${encodeURIComponent(symbol)}?${params}`,
+    { method: "POST" },
+  );
+}
+
+export function fetchCorporateActionCandidateStatus(): Promise<CorporateActionCandidateStatus> {
+  return request<CorporateActionCandidateStatus>("/api/admin/corporate-actions/candidates");
+}
+
+export function fetchCorporateActionApprovalStatus(): Promise<CorporateActionApprovalStatus> {
+  return request<CorporateActionApprovalStatus>("/api/admin/corporate-actions/approvals");
+}
+
+export function fetchCorporateActionCandidates(
+  source: string,
+  symbol: string,
+  start: string,
+  end: string,
+  limit = 100,
+): Promise<CorporateActionCandidatePreview> {
+  const params = new URLSearchParams({ start, end, limit: String(limit) });
+  return request<CorporateActionCandidatePreview>(
+    `/api/admin/corporate-actions/candidates/${encodeURIComponent(source)}/${encodeURIComponent(symbol)}?${params}`,
+  );
+}
+
+export function approveCorporateActionCandidate(
+  source: string,
+  symbol: string,
+  input: CorporateActionApprovalRequest,
+): Promise<CorporateActionApprovalResult> {
+  return request<CorporateActionApprovalResult>(
+    `/api/admin/corporate-actions/approvals/${encodeURIComponent(source)}/${encodeURIComponent(symbol)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
 }
 
 export function fetchProviderAuditHistory(

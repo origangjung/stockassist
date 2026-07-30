@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime
 
 from app.pipeline.candles import DataQualityLog, DataQualityLogRecord
 from app.providers.contracts import Candle, StockInfo
@@ -22,6 +24,29 @@ class StockRepository(ABC):
     def upsert(self, stock: StockInfo) -> None: ...
 
 
+@dataclass(frozen=True)
+class CandlePriceBasisInventoryRow:
+    source_provider: str
+    price_basis: str
+    price_basis_rule_version: str
+    data_stage: str
+    interval: str
+    aggregation_version: str
+    candle_count: int
+    first_timestamp: datetime
+    last_timestamp: datetime
+
+
+@dataclass(frozen=True)
+class CandlePriceBasisInventory:
+    rows: list[CandlePriceBasisInventoryRow]
+    total_candles: int
+    unknown_candles: int
+    legacy_unknown_candles: int
+    legacy_rule_candles: int
+    total_groups: int
+
+
 class CandleRepository(ABC):
     @abstractmethod
     def save_many(
@@ -32,15 +57,42 @@ class CandleRepository(ABC):
         interval: str,
         stage: str,
         aggregation_version: str,
+        source_provider: str,
+        price_basis_rule_version: str,
     ) -> None: ...
 
     @abstractmethod
     def find(self, symbol: str, *, interval: str, stage: str, limit: int) -> list[Candle]: ...
 
+    @abstractmethod
+    def price_basis_inventory(
+        self,
+        *,
+        symbol: str,
+        limit: int = 200,
+    ) -> CandlePriceBasisInventory: ...
+
 
 class QualityLogRepository(ABC):
     @abstractmethod
     def save_many(self, symbol: str, logs: list[DataQualityLog]) -> None: ...
+
+
+@dataclass(frozen=True)
+class CandleIngestionWrite:
+    stock: StockInfo
+    raw_candles: list[Candle]
+    cleaned_candles: list[Candle]
+    quality_logs: list[DataQualityLog]
+    interval: str
+    cleaned_aggregation_version: str
+    source_provider: str
+    price_basis_rule_version: str
+
+
+class CandleIngestionRepository(ABC):
+    @abstractmethod
+    def save(self, batch: CandleIngestionWrite) -> None: ...
 
 
 class QualityLogReadRepository(ABC):
@@ -57,7 +109,14 @@ class QualityLogReadRepository(ABC):
 
 class BacktestRepository(ABC):
     @abstractmethod
-    def save(self, symbol: str, config: BacktestConfig, result: BacktestResult) -> str: ...
+    def save(
+        self,
+        symbol: str,
+        config: BacktestConfig,
+        result: BacktestResult,
+        *,
+        metadata: dict[str, object] | None = None,
+    ) -> str: ...
 
     @abstractmethod
     def list_runs(

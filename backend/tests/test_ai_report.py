@@ -3,15 +3,19 @@ import json
 
 import httpx2
 import pytest
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
 
 from app.adapters.broker import BrokerAdapter
 from app.ai_reports.compliance import ComplianceValidator
 from app.ai_reports.errors import ReportComplianceError
 from app.ai_reports.mock import MockAIReportGenerator
 from app.ai_reports.openai import OpenAIReportGenerator
+from app.models.ai_report import AIReportModel
+from app.repositories.sqlalchemy import SqlAlchemyAIReportRepository
 from app.indicators import IndicatorEngine
 from app.investor_flow.providers import MockInvestorFlowProvider
-from app.prediction import XGBoostPredictionEngine
+from app.prediction import LightweightPredictionEngine
 from app.providers.mock import MockProvider
 from app.repositories.memory import InMemoryAIReportRepository
 from app.score import ScoreEngine, TechnicalScoreCalculator
@@ -27,7 +31,7 @@ def _service(repository=None):
     return AIReportService(
         MarketDataService(broker),
         ScoreService(broker, IndicatorEngine(), TechnicalScoreCalculator(), ScoreEngine()),
-        PredictionService(broker, XGBoostPredictionEngine()),
+        PredictionService(broker, LightweightPredictionEngine()),
         InvestorFlowService(MockInvestorFlowProvider()),
         MockAIReportGenerator(),
         ComplianceValidator(),
@@ -75,7 +79,7 @@ def test_ai_report_reuses_score_candles_and_warning_facts():
     service = AIReportService(
         MarketDataService(broker),
         ScoreService(broker, IndicatorEngine(), TechnicalScoreCalculator(), ScoreEngine()),
-        PredictionService(broker, XGBoostPredictionEngine()),
+        PredictionService(broker, LightweightPredictionEngine()),
         InvestorFlowService(MockInvestorFlowProvider()),
         MockAIReportGenerator(),
         ComplianceValidator(),
@@ -88,6 +92,28 @@ def test_ai_report_reuses_score_candles_and_warning_facts():
     assert provider.warning_calls == 1
 
 
+def test_sqlalchemy_ai_report_persistence_encodes_decimal_json_values():
+    engine = create_engine("sqlite://")
+    AIReportModel.__table__.create(engine)
+    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+
+    try:
+        report = _service(SqlAlchemyAIReportRepository(sessions)).report(
+            "005930", horizon_days=5, limit=180
+        )
+        with sessions() as session:
+            stored = session.scalar(select(AIReportModel))
+
+        assert stored is not None
+        assert stored.report["rise_probability"] == str(report["rise_probability"])
+        assert stored.report["support_resistance"]["support"] == str(
+            report["support_resistance"]["support"]
+        )
+        assert stored.report["data_as_of"] == report["data_as_of"].isoformat()
+    finally:
+        engine.dispose()
+
+
 def test_master_orchestrator_isolates_score_agent_failure():
     class FailingScoreService:
         def analysis_bundle(self, symbol: str, limit: int):
@@ -97,7 +123,7 @@ def test_master_orchestrator_isolates_score_agent_failure():
     report = AIReportService(
         MarketDataService(broker),
         FailingScoreService(),
-        PredictionService(broker, XGBoostPredictionEngine()),
+        PredictionService(broker, LightweightPredictionEngine()),
         InvestorFlowService(MockInvestorFlowProvider()),
         MockAIReportGenerator(),
         ComplianceValidator(),

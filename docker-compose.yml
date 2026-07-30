@@ -8,7 +8,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://stockpilot:change-me@postgres:5432/stockpilot}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      PERSISTENCE_ENABLED: "true"
+      PERSISTENCE_ENABLED: ${PERSISTENCE_ENABLED:-true}
       SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-false}
       SCHEDULER_INTERVAL_MINUTES: ${SCHEDULER_INTERVAL_MINUTES:-5}
       SCHEDULER_SYMBOLS: ${SCHEDULER_SYMBOLS:-005930,000660,035420,AAPL,MSFT}
@@ -27,9 +27,11 @@ services:
       REFERENCE_ALERTS_ENABLED: ${REFERENCE_ALERTS_ENABLED:-false}
       REFERENCE_ALERT_INTERVAL_SECONDS: ${REFERENCE_ALERT_INTERVAL_SECONDS:-30}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      ANALYSIS_API_KEY: ${ANALYSIS_API_KEY:-}
       ADMIN_MAX_FAILED_ATTEMPTS: ${ADMIN_MAX_FAILED_ATTEMPTS:-5}
       ADMIN_LOCKOUT_SECONDS: ${ADMIN_LOCKOUT_SECONDS:-60}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,api}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
@@ -60,6 +62,8 @@ services:
       NEWS_TIMEOUT_SECONDS: ${NEWS_TIMEOUT_SECONDS:-10}
       INVESTOR_FLOW_PROVIDER: ${INVESTOR_FLOW_PROVIDER:-mock}
       PREDICTION_ENGINE: ${PREDICTION_ENGINE:-lightweight}
+      MODEL_ARTIFACT_ACTIVATION_ENABLED: ${MODEL_ARTIFACT_ACTIVATION_ENABLED:-false}
+      MODEL_ARTIFACT_DIR: ${MODEL_ARTIFACT_DIR:-/app/artifacts/models}
       KIS_BASE_URL: ${KIS_BASE_URL:-https://openapi.koreainvestment.com:9443}
       KIS_APP_KEY: ${KIS_APP_KEY:-}
       KIS_APP_SECRET: ${KIS_APP_SECRET:-}
@@ -82,13 +86,15 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     ports: ["127.0.0.1:8000:8000"]
+    volumes:
+      - model-artifacts:/app/artifacts/models
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
-    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000"]
+    command: ["sh", "-c", "if [ \"$$PERSISTENCE_ENABLED\" = \"true\" ]; then alembic upgrade head; fi && uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000"]
   web:
     build:
       context: .
@@ -100,11 +106,15 @@ services:
     environment:
       BACKEND_INTERNAL_URL: http://api:8000
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      ANALYSIS_API_KEY: ${ANALYSIS_API_KEY:-}
       ADMIN_UI_USERNAME: ${ADMIN_UI_USERNAME:-}
       ADMIN_UI_PASSWORD: ${ADMIN_UI_PASSWORD:-}
       ADMIN_PROXY_TIMEOUT_MS: ${ADMIN_PROXY_TIMEOUT_MS:-15000}
       ADMIN_PROXY_MAX_RESPONSE_BYTES: ${ADMIN_PROXY_MAX_RESPONSE_BYTES:-2000000}
+      MARKET_PROXY_TIMEOUT_MS: ${MARKET_PROXY_TIMEOUT_MS:-20000}
+      MARKET_PROXY_MAX_RESPONSE_BYTES: ${MARKET_PROXY_MAX_RESPONSE_BYTES:-3000000}
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
     ports: ["127.0.0.1:3000:3000"]
   nginx:
     image: nginx:1.27-alpine
@@ -177,3 +187,4 @@ volumes:
   prometheus-data:
   alertmanager-data:
   grafana-data:
+  model-artifacts:

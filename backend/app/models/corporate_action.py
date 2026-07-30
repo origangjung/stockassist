@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -58,6 +59,32 @@ class CorporateActionModel(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     rule_version: Mapped[str] = mapped_column(String(24), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+
+class CorporateActionApprovalModel(Base):
+    __tablename__ = "corporate_action_approvals"
+    __table_args__ = (
+        UniqueConstraint("corporate_action_id", name="uq_corporate_action_approval_action"),
+        UniqueConstraint("evidence_hash", name="uq_corporate_action_approval_evidence_hash"),
+        Index("ix_corporate_action_approvals_reviewed_at", "reviewed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
+    corporate_action_id: Mapped[int] = mapped_column(
+        ForeignKey("corporate_actions.id", ondelete="RESTRICT"), nullable=False
+    )
+    group_hint: Mapped[str] = mapped_column(String(64), nullable=False)
+    receipt_no: Mapped[str] = mapped_column(String(14), nullable=False)
+    filing_evidence_url: Mapped[str] = mapped_column(Text, nullable=False)
+    exchange_evidence_url: Mapped[str] = mapped_column(Text, nullable=False)
+    reviewed_by: Mapped[str] = mapped_column(String(64), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

@@ -105,6 +105,7 @@ def test_quote_uses_one_cached_oauth_token_and_preserves_unavailable_fields():
 
 def test_candle_pagination_and_market_data_shapes_are_mapped():
     candle_calls: list[str | None] = []
+    adjusted_values: list[str | None] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         if request.url.path == "/oauth2/token":
@@ -112,6 +113,7 @@ def test_candle_pagination_and_market_data_shapes_are_mapped():
         if request.url.path == "/api/v1/candles":
             before = request.url.params.get("before")
             candle_calls.append(before)
+            adjusted_values.append(request.url.params.get("adjusted"))
             timestamp = (
                 "2026-07-13T00:00:00+09:00" if before is None else "2026-07-12T00:00:00+09:00"
             )
@@ -178,6 +180,7 @@ def test_candle_pagination_and_market_data_shapes_are_mapped():
     assert len(candles) == 2
     assert all(candle.price_basis == "provider_adjusted" for candle in candles)
     assert candle_calls == [None, "2026-07-12T00:00:00+09:00"]
+    assert adjusted_values == ["true", "true"]
     assert asks[0].price == Decimal("72200") and bids[0].quantity == 200
     assert trades[0].side is None and trades[0].quantity == 3
 
@@ -302,7 +305,7 @@ def test_429_retries_and_terminal_error_preserves_request_id():
         client.close()
 
     assert sleeps and sleeps[0] >= 1
-    assert caught.value.code == "stock-not-found"
+    assert caught.value.code == "toss-http-404"
     assert caught.value.request_id == "req-missing"
 
 
@@ -379,3 +382,37 @@ def test_audit_records_only_terminal_error_after_retry():
     assert sink.events[0].outcome == "error"
     assert sink.events[0].provider_request_id == "req-terminal"
     assert sink.events[0].attempt_count == 2
+
+
+def test_untrusted_toss_error_code_is_replaced_before_audit_storage():
+    sink = _AuditSink()
+    secret = "top-secret-token"
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/oauth2/token":
+            return _token_response()
+        return httpx2.Response(
+            404,
+            json={
+                "error": {
+                    "requestId": "req-safe-code",
+                    "code": f"access_token={secret}",
+                    "message": "not found",
+                }
+            },
+        )
+
+    http = httpx2.Client(base_url=BASE_URL, transport=httpx2.MockTransport(handler))
+    limiter = TossRateLimiter()
+    tokens = TossTokenManager(http, limiter, client_id="client", client_secret="secret")
+    client = TossApiClient(http, tokens, limiter, max_retries=0, audit_sink=sink)
+    try:
+        with pytest.raises(ProviderNotFoundError) as caught:
+            client.get("/api/v1/prices", group="MARKET_DATA")
+    finally:
+        client.close()
+
+    assert caught.value.code == "toss-http-404"
+    assert len(sink.events) == 1
+    assert sink.events[0].error_code == "toss-http-404"
+    assert secret not in repr(sink.events[0])

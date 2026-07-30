@@ -13,8 +13,8 @@ class MarketDataService:
         return provider.get_quote(symbol), provider.name
 
     def candles(self, symbol: str, limit: int):
-        provider = self._broker.provider_for(Capability.CANDLES)
-        return provider.get_candles(symbol, limit), provider.name
+        batch = self._broker.candles(symbol, limit)
+        return batch.candles, batch.provider.name
 
     def orderbook(self, symbol: str):
         provider = self._broker.provider_for(Capability.ORDERBOOK)
@@ -36,5 +36,5 @@ class MarketDataService:
     def processed_candles(
         self, symbol: str, limit: int, interval: CandleInterval
     ) -> tuple[PipelineResult, str]:
-        provider = self._broker.provider_for(Capability.CANDLES)
-        return self._pipeline.process(provider.get_candles(symbol, limit), interval), provider.name
+        batch = self._broker.candles(symbol, limit)
+        return self._pipeline.process(batch.candles, interval), batch.provider.name

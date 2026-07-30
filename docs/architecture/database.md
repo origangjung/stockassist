@@ -35,3 +35,27 @@ alembic upgrade head
 `stock_candles.price_basis`를 추가한다. raw/cleaned 캔들을 덮어쓰지 않는 보정 원칙과
 기준시점 재현 규칙은
 [Point-in-time corporate action adjustments](corporate-action-adjustments.md)에 정의한다.
+
+`20260720_0019` adds `corporate_action_approvals`, an immutable one-to-one evidence record for a
+manually confirmed corporate-action revision. It stores no provider credential or response body.
+The action row and evidence row are inserted atomically, and both action ID and canonical evidence
+hash are unique to make retries idempotent.
+
+`20260720_0020` adds `stock_candles.source_provider` and a bounded inventory index. Existing rows
+receive the explicit sentinel `legacy_unknown`; neither their provider nor price basis is inferred.
+New ingestion stores the selected Provider name. Operational review uses the read-only inventory
+described in [Candle price-basis provenance and inventory](candle-price-basis-inventory.md).
+
+`20260720_0021` adds `stock_candles.price_basis_rule_version`. Existing rows retain the sentinel
+`legacy_unknown`; new ingestion persists the version declared by the validated Provider policy.
+
+CI derives the single expected head from the revision graph and performs an empty-database
+`upgrade head -> downgrade base -> upgrade head` round-trip on PostgreSQL 16. The backend test
+suite runs the same full revision chain against an isolated temporary SQLite database. These checks
+never target a developer database or persistent Docker volume and do not replace a backup/restore
+rehearsal with production-like data.
+
+Production candle ingestion uses one repository transaction for the stock master row, raw candles,
+cleaned candles and data-quality logs. Any failure rolls back all four writes. The individual
+repositories remain available for bounded read paths and focused tests, but the scheduler and
+manual ingestion service are wired to the atomic repository.

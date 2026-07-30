@@ -4,7 +4,7 @@ from contextlib import suppress
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from app.core.sanitization import public_provider_error_message
+from app.core.sanitization import public_provider_error_code, public_provider_error_message
 from app.providers.errors import ProviderError
 from app.realtime.contracts import RealtimeHub
 from app.realtime.hub import (
@@ -75,7 +75,7 @@ async def quote_stream(websocket: WebSocket, symbol: str) -> None:
         await _close_with_error(
             websocket,
             code=4404 if exc.status_code == 404 else 1013,
-            error_code=exc.code,
+            error_code=public_provider_error_code(exc.code),
             message=public_provider_error_message(exc),
         )
     except Exception:

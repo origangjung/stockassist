@@ -2,7 +2,7 @@
 
 Phase 12 provides an optional XGBoost model that estimates the probability that the close price
 will be higher after a requested number of trading days. To keep local previews and the default
-Docker image small, runtime prediction defaults to `lightweight_momentum`.
+Docker image small, runtime prediction defaults to `lightweight`.
 
 ## Runtime modes
 
@@ -27,9 +27,20 @@ features and labels, preventing different symbol-specific models from sharing an
 New versions enter as `challenger`. The protected administrator API can promote one version to
 `champion` for each `(symbol, algorithm, horizon_days)` scope; the repository demotes the previous
 Champion in the same transaction and a partial unique index enforces the invariant at the database
-boundary. Promotion changes registry metadata only. It does not deploy an artifact or change
-runtime inference, and the outward validation status remains `experimental` until the separate
-quantitative validation and artifact deployment workflow is implemented.
-- Metadata is persisted in `model_versions` and results in `predictions`. Model artifacts are intentionally not promoted or reused until a later champion-challenger registry phase.
+boundary. Runtime activation remains disabled by default. When
+`MODEL_ARTIFACT_ACTIVATION_ENABLED=true`, XGBoost training writes an immutable UBJ artifact and a
+bounded JSON manifest under `MODEL_ARTIFACT_DIR`. Promotion first verifies the version, symbol,
+algorithm, horizon, regular-file boundary, size, and SHA-256 checksum. It then updates registry
+metadata and atomically replaces the active scope pointer. Inference reloads only the verified
+active artifact and otherwise follows the normal training path. The store retains one previous
+version and supports checksum-verified atomic rollback; deployment orchestration must keep registry
+and runtime rollback coordinated.
+
+Activation requires XGBoost mode, persistence, and an administrator API key. Artifacts are ignored
+by Git and must be transferred through an access-controlled artifact store rather than the source
+repository. Validation remains `experimental`; promotion is not evidence of investment efficacy.
+Docker Compose stores this directory in the dedicated `model-artifacts` volume so an explicitly
+enabled active model survives API container recreation. Back up and validate that volume separately
+from PostgreSQL; it must never contain Provider credentials or raw private account responses.
 
 The endpoint is `GET /api/v1/stocks/{symbol}/prediction?horizon_days=5&limit=180`. It is a reference probability, not a target price, recommendation, or trade instruction.

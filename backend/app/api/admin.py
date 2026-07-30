@@ -3,7 +3,11 @@ from secrets import compare_digest
 from fastapi import Depends, Header, HTTPException, Request, status
 
 from app.config import Settings, get_settings
-from app.core.rate_limit import RedisSlidingWindowLimiter, SlidingWindowLimiter
+from app.core.rate_limit import (
+    RedisSlidingWindowLimiter,
+    SlidingWindowLimiter,
+    client_ip_key,
+)
 from redis.exceptions import RedisError
 
 _failed_attempts = SlidingWindowLimiter(max_keys=4_096)
@@ -21,7 +25,7 @@ async def require_admin_access(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin API is not configured",
         )
-    client = request.client.host if request.client else "unknown"
+    client = client_ip_key(request, trust_proxy_headers=settings.trust_proxy_headers)
     limit = settings.admin_max_failed_attempts
     window = settings.admin_lockout_seconds
     distributed: RedisSlidingWindowLimiter | None = (

@@ -15,6 +15,9 @@ node_modules/
 .corepack/
 .uv-cache/
 .next/
+*.tsbuildinfo
+.ui-debug-profile/
+ui-*-preview.png
 .agents/
 .codex/
 coverage/
@@ -22,6 +25,7 @@ coverage/
 htmlcov/
 dist/
 build/
+artifacts/
 *.log
 *.sqlite
 *.sqlite3

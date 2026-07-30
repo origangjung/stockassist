@@ -5,6 +5,7 @@ import random
 from app.providers.contracts import (
     BrokerAccount,
     Candle,
+    CandlePriceBasisPolicy,
     Holding,
     HoldingsSnapshot,
     OrderbookLevel,
@@ -72,6 +73,12 @@ class MockProvider(StockProvider):
     """Deterministic data source for pipeline and API contract development."""
 
     name = "mock"
+    candle_price_basis_policy = CandlePriceBasisPolicy(
+        expected_basis="unadjusted",
+        verification_status="synthetic",
+        rule_version="mock-candles-v1",
+        evidence="Deterministic generator emits raw synthetic OHLCV without adjustment",
+    )
     capabilities = ProviderCapabilities(
         supports_quote=True,
         supports_orderbook=True,

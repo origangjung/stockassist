@@ -1,6 +1,5 @@
 from app.adapters.broker import BrokerAdapter
 from app.prediction.contracts import PredictionEngine
-from app.providers.contracts import Capability
 from app.repositories.contracts import PredictionRepository
 
 
@@ -17,17 +16,17 @@ class PredictionService:
 
     def predict(self, symbol: str, *, horizon_days: int, limit: int) -> dict:
         symbol = symbol.strip().upper()
-        provider = self._broker.provider_for(Capability.CANDLES)
+        batch = self._broker.candles(symbol, limit)
         result = self._engine.predict(
             symbol,
-            provider.get_candles(symbol, limit),
+            batch.candles,
             horizon_days=horizon_days,
         )
         if self._repository is not None:
             self._repository.save(result, algorithm=self._engine.algorithm)
         return {
             **result.__dict__,
-            "provider": provider.name,
+            "provider": batch.provider.name,
             "algorithm": self._engine.algorithm,
             "is_prediction": True,
             "persistence_status": "saved" if self._repository is not None else "disabled",

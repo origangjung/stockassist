@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.core.compliance import DISCLAIMER
 from app.core.sanitization import (
     public_provider_error_message,
+    public_provider_error_code,
     sanitize_external_data,
     sanitize_external_text,
 )
@@ -65,20 +66,24 @@ async def validation_exception_handler(
 
 
 async def provider_exception_handler(request: Request, exc: ProviderError) -> JSONResponse:
+    code = public_provider_error_code(exc.code)
+    provider_request_id = (
+        sanitize_external_text(exc.request_id, maximum=128) if exc.request_id else None
+    )
     logger.warning(
         "Provider API error code=%s provider_request_id=%s",
-        exc.code,
-        exc.request_id,
+        code,
+        provider_request_id,
     )
     sanitized = sanitize_external_data(exc.data or {})
     data = sanitized if isinstance(sanitized, dict) else {}
-    if exc.request_id:
-        data["provider_request_id"] = sanitize_external_text(exc.request_id, maximum=128)
+    if provider_request_id:
+        data["provider_request_id"] = provider_request_id
     message = public_provider_error_message(exc)
     return _error_response(
         request,
         exc.status_code,
-        exc.code,
+        code,
         message,
         data or None,
     )

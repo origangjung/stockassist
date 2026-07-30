@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { KeyboardEvent, useRef, useState } from "react";
 import {
   fetchDisclosures,
   fetchFinancials,
@@ -81,7 +81,11 @@ function ResearchState({
   retry?: () => void;
 }) {
   return (
-    <div className={`research-state ${kind}`}>
+    <div
+      aria-live={kind === "error" ? "assertive" : "polite"}
+      className={`research-state ${kind}`}
+      role={kind === "error" ? "alert" : "status"}
+    >
       <span>{message}</span>
       {retry && <button type="button" onClick={retry}>다시 시도</button>}
     </div>
@@ -182,53 +186,117 @@ function ResearchFooter({ provider, dataAsOf, detail }: { provider: string; data
   return <footer className="research-footer"><span>{provider} · {detail}</span>{dataAsOf && <span>기준 {formatDate(dataAsOf)}</span>}</footer>;
 }
 
-export function ResearchDetails({ symbol, currency }: { symbol: string; currency: string }) {
+export function ResearchDetails({
+  symbol,
+  currency,
+  market,
+}: {
+  symbol: string;
+  currency: string;
+  market: string;
+}) {
   const [activeTab, setActiveTab] = useState<ResearchTab>("financials");
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const fiscalYear = new Date().getFullYear() - 1;
+  const supportsDomesticResearch = market === "KOSPI" || market === "KOSDAQ";
+  const activeTabNeedsDomesticData = activeTab === "financials" || activeTab === "flow" || activeTab === "disclosures";
+  const activeTabUnavailable = activeTabNeedsDomesticData && !supportsDomesticResearch;
   const financials = useQuery({
     queryKey: ["research", "financials", symbol, fiscalYear],
-    queryFn: () => fetchFinancials(symbol, fiscalYear),
-    enabled: activeTab === "financials",
+    queryFn: ({ signal }) => fetchFinancials(symbol, fiscalYear, signal),
+    enabled: activeTab === "financials" && supportsDomesticResearch,
     staleTime: 5 * 60_000,
     retry: 1,
   });
   const flow = useQuery({
     queryKey: ["research", "flow", symbol],
-    queryFn: () => fetchInvestorFlow(symbol),
-    enabled: activeTab === "flow" && currency === "KRW",
+    queryFn: ({ signal }) => fetchInvestorFlow(symbol, signal),
+    enabled: activeTab === "flow" && supportsDomesticResearch && currency === "KRW",
     staleTime: 60_000,
     retry: 1,
   });
   const news = useQuery({
     queryKey: ["research", "news", symbol],
-    queryFn: () => fetchNews(symbol),
+    queryFn: ({ signal }) => fetchNews(symbol, signal),
     enabled: activeTab === "news",
     staleTime: 5 * 60_000,
     retry: 1,
   });
   const disclosures = useQuery({
     queryKey: ["research", "disclosures", symbol],
-    queryFn: () => fetchDisclosures(symbol),
-    enabled: activeTab === "disclosures",
+    queryFn: ({ signal }) => fetchDisclosures(symbol, signal),
+    enabled: activeTab === "disclosures" && supportsDomesticResearch,
     staleTime: 5 * 60_000,
     retry: 1,
   });
+  const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab);
+  const panelId = `research-panel-${symbol}`;
+  const tabId = (tab: ResearchTab) => `research-tab-${tab}-${symbol}`;
+
+  const activateTab = (index: number) => {
+    const nextTab = tabs[index];
+    if (!nextTab) return;
+    setActiveTab(nextTab.id);
+    tabRefs.current[index]?.focus();
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      activateTab((index + 1) % tabs.length);
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      activateTab((index - 1 + tabs.length) % tabs.length);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      activateTab(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      activateTab(tabs.length - 1);
+    }
+  };
 
   return (
     <section className="research-details">
       <header className="research-heading">
         <div><span>FUNDAMENTAL · CONTENT · FLOW</span><h3>기업·시장 리서치</h3></div>
-        <small>선택한 탭만 조회해 데이터 사용량을 줄입니다.</small>
+        <small>{supportsDomesticResearch ? "선택한 탭만 조회해 데이터 사용량을 줄입니다." : "해외 종목은 뉴스 탭을 우선 제공합니다."}</small>
       </header>
       <div className="research-tabs" role="tablist" aria-label="기업 리서치 분류">
-        {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}><b>{tab.label}</b><small>{tab.note}</small></button>)}
+        {tabs.map((tab, index) => (
+          <button
+            aria-controls={panelId}
+            aria-selected={activeTab === tab.id}
+            id={tabId(tab.id)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(event) => handleTabKeyDown(event, index)}
+            ref={(element) => { tabRefs.current[index] = element; }}
+            role="tab"
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            type="button"
+          >
+            <b>{tab.label}</b><small>{tab.note}</small>
+          </button>
+        ))}
       </div>
-      <div className="research-panel" role="tabpanel">
-        {activeTab === "financials" && (financials.isPending ? <ResearchState kind="loading" message="재무 정보를 불러오는 중입니다." /> : financials.isError ? <ResearchState kind="error" message={financials.error.message} retry={() => { void financials.refetch(); }} /> : <FinancialPanel data={financials.data} />)}
-        {activeTab === "flow" && currency !== "KRW" && <ResearchState kind="empty" message="종목별 투자자 수급은 현재 국내 주식만 지원합니다." />}
-        {activeTab === "flow" && currency === "KRW" && (flow.isPending ? <ResearchState kind="loading" message="투자자 수급을 불러오는 중입니다." /> : flow.isError ? <ResearchState kind="error" message={flow.error.message} retry={() => { void flow.refetch(); }} /> : <FlowPanel data={flow.data} />)}
+      <div
+        aria-busy={
+          (activeTab === "financials" && supportsDomesticResearch && financials.isPending)
+          || (activeTab === "flow" && supportsDomesticResearch && currency === "KRW" && flow.isPending)
+          || (activeTab === "news" && news.isPending)
+          || (activeTab === "disclosures" && supportsDomesticResearch && disclosures.isPending)
+        }
+        aria-labelledby={tabId(tabs[activeTabIndex]?.id ?? "financials")}
+        className="research-panel"
+        id={panelId}
+        role="tabpanel"
+      >
+        {activeTabUnavailable && <ResearchState kind="empty" message="현재 선택한 해외 종목에는 이 데이터 소스가 아직 연동되지 않았습니다. 뉴스 분석은 이용할 수 있습니다." />}
+        {activeTab === "financials" && !activeTabUnavailable && (financials.isPending ? <ResearchState kind="loading" message="재무 정보를 불러오는 중입니다." /> : financials.isError ? <ResearchState kind="error" message={financials.error.message} retry={() => { void financials.refetch(); }} /> : <FinancialPanel data={financials.data} />)}
+        {activeTab === "flow" && !activeTabUnavailable && (flow.isPending ? <ResearchState kind="loading" message="투자자 수급을 불러오는 중입니다." /> : flow.isError ? <ResearchState kind="error" message={flow.error.message} retry={() => { void flow.refetch(); }} /> : <FlowPanel data={flow.data} />)}
         {activeTab === "news" && (news.isPending ? <ResearchState kind="loading" message="뉴스 분석을 불러오는 중입니다." /> : news.isError ? <ResearchState kind="error" message={news.error.message} retry={() => { void news.refetch(); }} /> : <NewsPanel data={news.data} />)}
-        {activeTab === "disclosures" && (disclosures.isPending ? <ResearchState kind="loading" message="공시를 불러오는 중입니다." /> : disclosures.isError ? <ResearchState kind="error" message={disclosures.error.message} retry={() => { void disclosures.refetch(); }} /> : <DisclosurePanel data={disclosures.data} />)}
+        {activeTab === "disclosures" && !activeTabUnavailable && (disclosures.isPending ? <ResearchState kind="loading" message="공시를 불러오는 중입니다." /> : disclosures.isError ? <ResearchState kind="error" message={disclosures.error.message} retry={() => { void disclosures.refetch(); }} /> : <DisclosurePanel data={disclosures.data} />)}
       </div>
     </section>
   );

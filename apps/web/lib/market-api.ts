@@ -256,24 +256,67 @@ interface ApiEnvelope<T> {
   error?: { message?: string };
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const MARKET_API_URL = process.env.NEXT_PUBLIC_MARKET_API_URL ?? "/api/market";
+const MARKET_REQUEST_TIMEOUT_MS = 20_000;
 
-async function request<T>(path: string, fallbackMessage: string): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, { cache: "no-store" });
+function publicRequestError<T>(
+  envelope: ApiEnvelope<T> | null,
+  fallbackMessage: string,
+  status: number,
+): Error {
+  if (status === 429) return new Error("요청이 많습니다. 잠시 후 다시 시도해 주세요.");
+  if (status >= 500) return new Error(`${fallbackMessage} 잠시 후 다시 시도해 주세요.`);
+
+  const suppliedMessage = envelope?.error?.message?.trim();
+  if (suppliedMessage && suppliedMessage.length <= 240) return new Error(suppliedMessage);
+
+  return new Error(status > 0 ? `${fallbackMessage} (${status})` : fallbackMessage);
+}
+
+async function request<T>(
+  path: string,
+  fallbackMessage: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  let response: Response;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), MARKET_REQUEST_TIMEOUT_MS);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller, { once: true });
+
+  try {
+    response = await fetch(`${MARKET_API_URL}${path}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch {
+    if (controller.signal.aborted) {
+      throw new Error("응답이 지연되고 있습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.");
+    }
+    throw new Error(`${fallbackMessage} 네트워크 연결을 확인한 뒤 다시 시도해 주세요.`);
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
+
   let envelope: ApiEnvelope<T> | null = null;
   try {
     envelope = (await response.json()) as ApiEnvelope<T>;
   } catch {
     // The status code still provides a useful bounded public error below.
   }
-  if (!response.ok || envelope === null) {
-    throw new Error(envelope?.error?.message ?? `${fallbackMessage} (${response.status})`);
+  if (!response.ok || envelope === null || !envelope.success) {
+    throw publicRequestError(envelope, fallbackMessage, response.status);
   }
   return envelope.data;
 }
 
 export function quoteWebSocketUrl(symbol: string): string {
-  const url = new URL(API_URL);
+  const realtimeUrl =
+    process.env.NEXT_PUBLIC_REALTIME_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    window.location.origin;
+  const url = new URL(realtimeUrl, window.location.origin);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.pathname = `/ws/v1/quotes/${encodeURIComponent(symbol)}`;
   url.search = "";
@@ -284,84 +327,102 @@ export function quoteWebSocketUrl(symbol: string): string {
 export async function fetchCandles(
   symbol: string,
   interval: CandleInterval,
+  signal?: AbortSignal,
 ): Promise<ProcessedCandles> {
   const params = new URLSearchParams({ interval, limit: "180" });
   return request<ProcessedCandles>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/candles/processed?${params}`,
     "차트 데이터를 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export function fetchStockInfo(symbol: string): Promise<StockInfo> {
+export function fetchStockInfo(symbol: string, signal?: AbortSignal): Promise<StockInfo> {
   return request<StockInfo>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}`,
     "종목 정보를 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export function fetchQuote(symbol: string): Promise<MarketQuote> {
+export function fetchQuote(symbol: string, signal?: AbortSignal): Promise<MarketQuote> {
   return request<MarketQuote>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/quote`,
     "현재가를 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export async function fetchStockSnapshot(symbol: string): Promise<StockSnapshot> {
-  const [stock, quote] = await Promise.all([fetchStockInfo(symbol), fetchQuote(symbol)]);
+export async function fetchStockSnapshot(symbol: string, signal?: AbortSignal): Promise<StockSnapshot> {
+  const [stock, quote] = await Promise.all([
+    fetchStockInfo(symbol, signal),
+    fetchQuote(symbol, signal),
+  ]);
   return { stock, quote };
 }
 
-export function fetchTechnicalAnalysis(symbol: string): Promise<TechnicalAnalysis> {
+export function fetchTechnicalAnalysis(symbol: string, signal?: AbortSignal): Promise<TechnicalAnalysis> {
   const params = new URLSearchParams({ limit: "180" });
   return request<TechnicalAnalysis>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/indicators?${params}`,
     "기술지표를 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export function fetchPatternAnalysis(symbol: string): Promise<PatternAnalysis> {
+export function fetchPatternAnalysis(symbol: string, signal?: AbortSignal): Promise<PatternAnalysis> {
   const params = new URLSearchParams({ limit: "180" });
   return request<PatternAnalysis>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/patterns?${params}`,
     "패턴 분석을 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export function fetchFinancials(symbol: string, fiscalYear: number): Promise<FinancialSnapshot> {
+export function fetchFinancials(
+  symbol: string,
+  fiscalYear: number,
+  signal?: AbortSignal,
+): Promise<FinancialSnapshot> {
   const params = new URLSearchParams({ fiscal_year: String(fiscalYear) });
   return request<FinancialSnapshot>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/financials?${params}`,
     "재무 정보를 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export function fetchNews(symbol: string): Promise<NewsAnalysis> {
+export function fetchNews(symbol: string, signal?: AbortSignal): Promise<NewsAnalysis> {
   const params = new URLSearchParams({ limit: "12" });
   return request<NewsAnalysis>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/news?${params}`,
     "뉴스 분석을 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export function fetchDisclosures(symbol: string): Promise<DisclosureAnalysis> {
+export function fetchDisclosures(symbol: string, signal?: AbortSignal): Promise<DisclosureAnalysis> {
   const params = new URLSearchParams({ days: "90", limit: "12" });
   return request<DisclosureAnalysis>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/disclosures?${params}`,
     "공시 정보를 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export function fetchInvestorFlow(symbol: string): Promise<InvestorFlow> {
+export function fetchInvestorFlow(symbol: string, signal?: AbortSignal): Promise<InvestorFlow> {
   return request<InvestorFlow>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/investor-flow`,
     "투자자 수급을 불러오지 못했습니다.",
+    signal,
   );
 }
 
-export async function fetchAnalysisReport(symbol: string): Promise<AIAnalysisReport> {
+export async function fetchAnalysisReport(symbol: string, signal?: AbortSignal): Promise<AIAnalysisReport> {
   const params = new URLSearchParams({ horizon_days: "5", limit: "180" });
   return request<AIAnalysisReport>(
     `/api/v1/stocks/${encodeURIComponent(symbol)}/ai-report?${params}`,
     "AI 분석을 완료하지 못했습니다.",
+    signal,
   );
 }

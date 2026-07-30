@@ -7,6 +7,7 @@ import httpx2
 from app.providers.contracts import (
     BrokerAccount,
     Candle,
+    CandlePriceBasisPolicy,
     Holding,
     HoldingsSnapshot,
     OrderbookLevel,
@@ -26,6 +27,12 @@ from app.providers.toss.rate_limit import TossRateLimiter
 
 class TossProvider(StockProvider):
     name = "toss"
+    candle_price_basis_policy = CandlePriceBasisPolicy(
+        expected_basis="provider_adjusted",
+        verification_status="verified",
+        rule_version="toss-adjusted-v1",
+        evidence="Daily candle request fixes adjusted=true",
+    )
     capabilities = ProviderCapabilities(
         supports_quote=True,
         supports_orderbook=True,
@@ -70,6 +77,7 @@ class TossProvider(StockProvider):
             client_id=client_id,
             client_secret=client_secret,
             cache=token_cache or InMemoryTokenCache(),
+            audit_sink=audit_sink,
         )
         return cls(
             TossApiClient(

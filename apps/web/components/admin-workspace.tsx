@@ -1,7 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 type WorkspaceTab = "operations" | "research" | "models" | "accounts";
 
@@ -22,6 +27,13 @@ const IngestionControlPanel = dynamic(
 );
 const DataQualityHistoryPanel = dynamic(
   () => import("./data-quality-history").then((module) => module.DataQualityHistoryPanel),
+  { loading },
+);
+const CandlePriceBasisInventoryPanel = dynamic(
+  () =>
+    import("./candle-price-basis-inventory").then(
+      (module) => module.CandlePriceBasisInventoryPanel,
+    ),
   { loading },
 );
 const CorporateActionHistoryPanel = dynamic(
@@ -79,22 +91,75 @@ const tabs: Array<{ id: WorkspaceTab; label: string; description: string }> = [
   { id: "accounts", label: "계좌·알림", description: "관심종목, 알림, 포트폴리오" },
 ];
 
+function tabFromHash(hash: string): WorkspaceTab | null {
+  const value = hash.replace(/^#/, "");
+  return tabs.some((tab) => tab.id === value) ? value as WorkspaceTab : null;
+}
+
 export function AdminWorkspace() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("operations");
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const active = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
+
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const requestedTab = tabFromHash(window.location.hash);
+      if (requestedTab) setActiveTab(requestedTab);
+    };
+
+    syncFromUrl();
+    window.addEventListener("hashchange", syncFromUrl);
+    window.addEventListener("popstate", syncFromUrl);
+    return () => {
+      window.removeEventListener("hashchange", syncFromUrl);
+      window.removeEventListener("popstate", syncFromUrl);
+    };
+  }, []);
+
+  const activateTab = (
+    nextTab: WorkspaceTab,
+    { focus = false, updateUrl = true }: { focus?: boolean; updateUrl?: boolean } = {},
+  ) => {
+    setActiveTab(nextTab);
+    if (updateUrl && window.location.hash !== `#${nextTab}`) {
+      const url = new URL(window.location.href);
+      url.hash = nextTab;
+      window.history.pushState({ workspace: nextTab }, "", url);
+    }
+    if (focus) {
+      const index = tabs.findIndex((tab) => tab.id === nextTab);
+      window.requestAnimationFrame(() => tabRefs.current[index]?.focus());
+    }
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+    if (nextIndex == null) return;
+
+    event.preventDefault();
+    activateTab(tabs[nextIndex].id, { focus: true });
+  };
 
   return (
     <div className="admin-workspace">
+      <p aria-live="polite" className="sr-only">{active.label} 탭을 표시합니다.</p>
       <div aria-label="관리자 작업 영역" className="admin-workspace-tabs" role="tablist">
-        {tabs.map((tab) => (
+        {tabs.map((tab, index) => (
           <button
             aria-controls={`workspace-${tab.id}`}
             aria-selected={activeTab === tab.id}
             className={activeTab === tab.id ? "active" : ""}
             id={`workspace-tab-${tab.id}`}
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => activateTab(tab.id)}
+            onKeyDown={(event) => handleTabKeyDown(event, index)}
+            ref={(element) => { tabRefs.current[index] = element; }}
             role="tab"
+            tabIndex={activeTab === tab.id ? 0 : -1}
             type="button"
           >
             <b>{tab.label}</b>
@@ -113,12 +178,14 @@ export function AdminWorkspace() {
         aria-labelledby={`workspace-tab-${activeTab}`}
         id={`workspace-${activeTab}`}
         role="tabpanel"
+        tabIndex={0}
       >
         {activeTab === "operations" && (
           <>
             <OperationsStatusPanel />
             <IngestionControlPanel />
             <DataQualityHistoryPanel />
+            <CandlePriceBasisInventoryPanel />
             <CorporateActionHistoryPanel />
             <ProviderAuditHistoryPanel />
             <DataLifecycleMaintenancePanel />

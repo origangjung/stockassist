@@ -1,7 +1,6 @@
 from app.adapters.broker import BrokerAdapter
 from app.patterns import PatternEngine
 from app.pipeline.candles import CandlePipeline
-from app.providers.contracts import Capability
 
 
 class PatternAnalysisService:
@@ -11,11 +10,10 @@ class PatternAnalysisService:
         self._pipeline = CandlePipeline()
 
     def patterns(self, symbol: str, limit: int) -> dict:
-        provider = self._broker.provider_for(Capability.CANDLES)
-        raw = provider.get_candles(symbol, limit)
-        cleaned = self._pipeline.process(raw).cleaned_candles
+        batch = self._broker.candles(symbol, limit)
+        cleaned = self._pipeline.process(batch.candles).cleaned_candles
         return {
             "symbol": symbol,
-            "provider": provider.name,
+            "provider": batch.provider.name,
             **self._engine.analyze(cleaned),
         }

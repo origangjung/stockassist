@@ -19,6 +19,11 @@ RUN if [ "$INSTALL_ML" = "true" ]; then \
       uv sync --locked --no-dev --extra ml; \
     else \
       uv sync --locked --no-dev; \
-    fi
+    fi && \
+    groupadd --system --gid 10001 stockpilot && \
+    useradd --system --uid 10001 --gid stockpilot --home-dir /nonexistent stockpilot && \
+    mkdir -p /app/artifacts/models && \
+    chown -R stockpilot:stockpilot /app/artifacts
+USER stockpilot
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "8000"]

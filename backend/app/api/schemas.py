@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -65,6 +65,7 @@ class BacktestRequest(BaseModel):
     tax_rate: float = Field(default=0.0018, ge=0, lt=1)
     slippage_rate: float = Field(default=0.0005, ge=0, lt=1)
     max_volume_participation: float = Field(default=1.0, gt=0, le=1)
+    corporate_action_mode: Literal["none", "forward_point_in_time"] = "none"
 
 
 class BacktestValidationRequest(BacktestRequest):
@@ -86,6 +87,7 @@ class BacktestComparisonRequest(BaseModel):
     tax_rate: float = Field(default=0.0018, ge=0, lt=1)
     slippage_rate: float = Field(default=0.0005, ge=0, lt=1)
     max_volume_participation: float = Field(default=0.1, gt=0, le=1)
+    corporate_action_mode: Literal["none", "forward_point_in_time"] = "none"
 
 
 class BacktestStrategyComparisonRequest(BaseModel):
@@ -99,6 +101,7 @@ class BacktestStrategyComparisonRequest(BaseModel):
     tax_rate: float = Field(default=0.0018, ge=0, lt=1)
     slippage_rate: float = Field(default=0.0005, ge=0, lt=1)
     max_volume_participation: float = Field(default=0.1, gt=0, le=1)
+    corporate_action_mode: Literal["none", "forward_point_in_time"] = "none"
 
 
 class WatchlistCreateRequest(BaseModel):
@@ -109,3 +112,13 @@ class PriceAlertCreateRequest(BaseModel):
     symbol: str = Field(pattern=r"^[0-9A-Z.-]{1,16}$")
     condition: Literal["above", "below"]
     target_price: Decimal = Field(gt=0, max_digits=20, decimal_places=6)
+
+
+class CorporateActionApprovalRequest(BaseModel):
+    start: date
+    end: date
+    group_hint: str = Field(pattern=r"^candidate:[0-9a-f]{20}$")
+    receipt_no: str = Field(pattern=r"^[0-9]{14}$")
+    effective_at: datetime
+    exchange_evidence_url: str = Field(min_length=12, max_length=2048)
+    confirmation: Literal["CONFIRM_CORPORATE_ACTION"]

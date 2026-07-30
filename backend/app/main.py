@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.adapters.broker import BrokerAdapter
 from app.backtest import BacktestEngine
@@ -18,6 +19,7 @@ from app.core.errors import (
 )
 from app.core.request_context import RequestIdMiddleware
 from app.core.security import SecurityHeadersMiddleware
+from app.core.analysis_access import AnalysisAccessMiddleware
 from app.core.rate_limit import RateLimitMiddleware, RedisSlidingWindowLimiter
 from app.observability import (
     MetricsMiddleware,
@@ -36,6 +38,7 @@ from app.disclosures import build_disclosure_provider
 from app.news import build_news_provider
 from app.investor_flow import build_investor_flow_provider
 from app.prediction import build_prediction_engine
+from app.prediction.artifacts import ModelArtifactStore
 from app.ai_reports import build_ai_report_generator
 from app.ai_reports.compliance import ComplianceValidator
 from app.services.financial import FinancialAnalysisService
@@ -53,13 +56,23 @@ from app.services.portfolio import PortfolioService
 from app.services.alerts import ReferenceAlertService
 from app.services.operations import OperationsStatusService
 from app.services.data_quality import DataQualityHistoryService
+from app.services.candle_inventory import CandlePriceBasisInventoryService
 from app.services.provider_audit import (
     ProviderAuditHistoryService,
     ProviderAuditMaintenanceService,
 )
 from app.services.ingestion import CandleIngestionService, IngestionOperationsService
 from app.services.data_lifecycle import DataLifecycleMaintenanceService
-from app.services.corporate_actions import CorporateActionService
+from app.services.corporate_actions import (
+    CorporateActionApprovalService,
+    CorporateActionCandidateService,
+    CorporateActionIngestionService,
+    CorporateActionService,
+)
+from app.corporate_actions.providers import build_corporate_action_candidate_providers
+from app.corporate_actions.exchange_verification import (
+    CorporateActionExchangeVerificationService,
+)
 from app.alerts import SqlAlchemyAlertRepository
 from app.realtime import build_realtime_quote_hub
 from app.score import ScoreEngine, TechnicalScoreCalculator
@@ -67,6 +80,9 @@ from app.repositories.backtest import SqlAlchemyBacktestRepository
 from app.repositories.provider_audit import SqlAlchemyProviderAuditRepository
 from app.repositories.data_lifecycle import SqlAlchemyDataLifecycleRepository
 from app.repositories.corporate_action import SqlAlchemyCorporateActionRepository
+from app.repositories.corporate_action_approval import (
+    SqlAlchemyCorporateActionApprovalRepository,
+)
 from app.repositories.score import SqlAlchemyScoreWeightRepository
 from app.repositories.sqlalchemy import (
     SqlAlchemyDisclosureRepository,
@@ -79,6 +95,7 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyQualityLogRepository,
     SqlAlchemyStockRepository,
     SqlAlchemyCandleRepository,
+    SqlAlchemyCandleIngestionRepository,
 )
 from app.websocket import router as websocket_router
 
@@ -108,6 +125,22 @@ corporate_action_repository = (
     SqlAlchemyCorporateActionRepository(sessions) if sessions is not None else None
 )
 corporate_action_service = CorporateActionService(corporate_action_repository)
+corporate_action_ingestion_service = CorporateActionIngestionService(
+    corporate_action_repository,
+    providers=[],
+)
+corporate_action_candidate_service = CorporateActionCandidateService(
+    build_corporate_action_candidate_providers(settings)
+)
+corporate_action_approval_repository = (
+    SqlAlchemyCorporateActionApprovalRepository(sessions) if sessions is not None else None
+)
+corporate_action_approval_service = CorporateActionApprovalService(
+    corporate_action_approval_repository,
+    corporate_action_candidate_service,
+    enabled=settings.corporate_action_approval_enabled,
+    exchange_verification=CorporateActionExchangeVerificationService(),
+)
 providers = build_providers(settings, audit_sink=provider_audit_repository)
 broker_adapter = BrokerAdapter(providers)
 market_service = MarketDataService(broker_adapter)
@@ -139,6 +172,9 @@ partition_maintenance_service = (
 )
 stock_repository = SqlAlchemyStockRepository(sessions) if sessions is not None else None
 candle_repository = SqlAlchemyCandleRepository(sessions) if sessions is not None else None
+candle_ingestion_repository = (
+    SqlAlchemyCandleIngestionRepository(sessions) if sessions is not None else None
+)
 financial_provider = build_financial_provider(settings)
 financial_service = FinancialAnalysisService(financial_provider, financial_repository)
 disclosure_provider = build_disclosure_provider(settings)
@@ -147,13 +183,23 @@ investor_flow_provider = build_investor_flow_provider(settings)
 disclosure_service = DisclosureAnalysisService(disclosure_provider, disclosure_repository)
 news_service = NewsAnalysisService(news_provider, news_repository)
 investor_flow_service = InvestorFlowService(investor_flow_provider, investor_flow_repository)
+model_artifact_store = (
+    ModelArtifactStore(settings.model_artifact_dir)
+    if settings.model_artifact_activation_enabled
+    else None
+)
 prediction_service = PredictionService(
     broker_adapter,
-    build_prediction_engine(settings.prediction_engine),
+    build_prediction_engine(settings.prediction_engine, model_artifact_store),
     prediction_repository,
 )
-model_registry_service = ModelRegistryService(prediction_repository)
-backtest_service = BacktestService(broker_adapter, BacktestEngine(), backtest_repository)
+model_registry_service = ModelRegistryService(prediction_repository, model_artifact_store)
+backtest_service = BacktestService(
+    broker_adapter,
+    BacktestEngine(),
+    backtest_repository,
+    corporate_actions=corporate_action_service,
+)
 score_service = ScoreService(
     broker_adapter,
     IndicatorEngine(),
@@ -191,6 +237,7 @@ operations_status_service = OperationsStatusService(
     data_lifecycle_maintenance_service,
 )
 data_quality_history_service = DataQualityHistoryService(quality_log_repository)
+candle_price_basis_inventory_service = CandlePriceBasisInventoryService(candle_repository)
 provider_audit_history_service = ProviderAuditHistoryService(provider_audit_repository)
 ingestion_service = (
     CandleIngestionService(
@@ -198,6 +245,7 @@ ingestion_service = (
         stock_repository,
         candle_repository,
         quality_log_repository,
+        atomic_repository=candle_ingestion_repository,
     )
     if stock_repository is not None
     and candle_repository is not None
@@ -247,6 +295,7 @@ async def lifespan(_: FastAPI):
         news_provider.close()
         investor_flow_provider.close()
         ai_report_generator.close()
+        corporate_action_candidate_service.close()
         if distributed_rate_limiter is not None:
             await distributed_rate_limiter.aclose()
 
@@ -257,6 +306,11 @@ app.state.health_service = health_service
 app.state.sentry_enabled = sentry_enabled
 app.state.allowed_origins = frozenset(settings.allowed_origins)
 app.state.distributed_rate_limiter = distributed_rate_limiter
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
+app.add_middleware(
+    AnalysisAccessMiddleware,
+    api_key=settings.analysis_api_key.get_secret_value() if settings.analysis_api_key else None,
+)
 app.add_middleware(
     RateLimitMiddleware,
     enabled=settings.rate_limit_enabled,

@@ -16,7 +16,12 @@ export function IngestionControlPanel() {
   const ingestion = useMutation({
     mutationFn: (target: string) => triggerIngestion(target),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "data-quality"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "data-quality"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["admin", "candles", "price-basis-inventory"],
+        }),
+      ]);
     },
   });
 
@@ -60,6 +65,7 @@ export function IngestionControlPanel() {
             <div className="ingestion-result">
               <strong>{ingestion.data.summary.symbol} 수집 완료</strong>
               <span>{ingestion.data.summary.provider} · 원본 {ingestion.data.summary.raw_count}개 · 정제 {ingestion.data.summary.cleaned_count}개 · 품질 로그 {ingestion.data.summary.quality_log_count}건</span>
+              <span>가격 기준 {ingestion.data.summary.price_basis} · 규칙 {ingestion.data.summary.price_basis_rule_version} · 검증 {ingestion.data.summary.price_basis_verification_status}</span>
               <small>수집은 시세 데이터 저장만 수행하며 주문이나 계좌 변경을 실행하지 않습니다.</small>
             </div>
           )}
