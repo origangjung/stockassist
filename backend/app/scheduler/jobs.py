@@ -1,3 +1,5 @@
+"""jobs 파일은 백엔드 도메인 기능을 담당한다."""
+
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -33,6 +35,8 @@ def build_scheduler(
     provider_audit_service: ProviderAuditMaintenanceService | None = None,
     data_lifecycle_service: DataLifecycleMaintenanceService | None = None,
 ) -> BackgroundScheduler:
+    """`build_scheduler`은(는) 입력 값과 설정을 결합해 새 결과 객체를 생성합니다."""
+
     sessions = create_session_factory(settings.database_url)
     scheduler = BackgroundScheduler(timezone="Asia/Seoul")
     if settings.scheduler_enabled:

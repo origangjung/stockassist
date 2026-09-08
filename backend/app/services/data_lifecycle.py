@@ -1,3 +1,5 @@
+"""data_lifecycle 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from datetime import UTC, datetime, timedelta
 import logging
 from threading import Lock
@@ -8,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class DataLifecycleMaintenanceService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(
         self,
         repository: DataLifecycleRepository | None,
@@ -16,6 +20,8 @@ class DataLifecycleMaintenanceService:
         retention_days: dict[str, int],
         cleanup_hour_kst: int,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._repository = repository
         self._enabled = enabled
         self._retention_days = dict(retention_days)
@@ -26,6 +32,8 @@ class DataLifecycleMaintenanceService:
         self._last_error_type: str | None = None
 
     def preview(self, now: datetime | None = None) -> dict[str, object]:
+        """`preview`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self._repository is None:
             return {**self.status(), "eligible_counts": None, "cutoffs": None}
         run_at = self._aware_now(now)
@@ -50,6 +58,8 @@ class DataLifecycleMaintenanceService:
         }
 
     def cleanup(self, now: datetime | None = None) -> dict[str, object]:
+        """`cleanup`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not self._enabled or self._repository is None:
             return self.status()
         run_at = self._aware_now(now)
@@ -71,6 +81,8 @@ class DataLifecycleMaintenanceService:
         return self.status()
 
     def status(self) -> dict[str, object]:
+        """`status`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._lock:
             if not self._enabled or self._repository is None:
                 status = "disabled"
@@ -95,6 +107,8 @@ class DataLifecycleMaintenanceService:
             }
 
     def _cutoffs(self, now: datetime) -> dict[str, datetime]:
+        """`_cutoffs`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return {
             dataset: now - timedelta(days=retention_days)
             for dataset, retention_days in self._retention_days.items()
@@ -102,6 +116,8 @@ class DataLifecycleMaintenanceService:
 
     @staticmethod
     def _aware_now(now: datetime | None) -> datetime:
+        """`_aware_now`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         value = now or datetime.now(UTC)
         if value.tzinfo is None:
             raise ValueError("Data lifecycle maintenance requires a timezone-aware timestamp")

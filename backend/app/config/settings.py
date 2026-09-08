@@ -1,3 +1,5 @@
+"""settings 파일은 백엔드 도메인 기능을 담당한다."""
+
 from functools import lru_cache
 import re
 from typing import Literal
@@ -7,6 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """`Settings` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
@@ -36,7 +40,10 @@ class Settings(BaseSettings):
     analysis_api_key: SecretStr | None = None
     admin_max_failed_attempts: int = Field(default=5, ge=3, le=20)
     admin_lockout_seconds: int = Field(default=60, ge=10, le=3600)
-    cors_origins: str = "http://localhost:3000,http://localhost:8080"
+    cors_origins: str = (
+        "http://localhost:3000,http://localhost:8080,"
+        "http://127.0.0.1:3000,http://127.0.0.1:8080"
+    )
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     rate_limit_enabled: bool = True
     rate_limit_backend: Literal["memory", "redis"] = "memory"
@@ -68,10 +75,33 @@ class Settings(BaseSettings):
     news_provider: Literal["mock", "rss"] = "mock"
     news_rss_search_url: str = "https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
     news_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    news_api_base_url: str = "https://newsapi.org/v2"
+    news_api_key: SecretStr | None = None
+    news_api_daily_request_limit: int = Field(default=90, ge=1, le=100)
+    news_training_source: Literal["newsapi", "gdelt", "both", "official_rss"] = "gdelt"
+    gdelt_doc_api_url: str = "https://api.gdeltproject.org/api/v2/doc/doc"
+    gdelt_daily_request_limit: int = Field(default=80, ge=1, le=5000)
+    official_rss_enabled: bool = True
+    official_rss_daily_request_limit: int = Field(default=12, ge=3, le=100)
+    alpha_vantage_base_url: str = "https://www.alphavantage.co/query"
+    alpha_vantage_api_key: SecretStr | None = None
+    alpha_vantage_daily_request_limit: int = Field(default=25, ge=1, le=25)
+    fred_base_url: str = "https://api.stlouisfed.org/fred"
+    fred_api_key: SecretStr | None = None
+    finra_api_base_url: str = "https://api.finra.org"
+    finra_token_url: str = (
+        "https://ews.fip.finra.org/fip/rest/ews/oauth2/access_token"
+    )
+    finra_client_id: str | None = None
+    finra_client_secret: SecretStr | None = None
+    sec_base_url: str = "https://data.sec.gov"
+    sec_user_agent: str | None = None
     investor_flow_provider: Literal["mock", "kis"] = "mock"
     prediction_engine: Literal["lightweight", "xgboost"] = "lightweight"
     model_artifact_activation_enabled: bool = False
     model_artifact_dir: str = "./artifacts/models"
+    local_ai_enabled: bool = False
+    local_ai_artifact_dir: str = "./artifacts/local-ai"
     kis_base_url: str = "https://openapi.koreainvestment.com:9443"
     kis_app_key: SecretStr | None = None
     kis_app_secret: SecretStr | None = None
@@ -82,17 +112,22 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5"
     openai_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     account_sync_enabled: bool = False
+    toss_trading_enabled: bool = False
     realtime_enabled: bool = False
-    realtime_source: Literal["polling", "kis"] = "polling"
+    realtime_source: Literal["polling", "kis", "toss"] = "polling"
     realtime_poll_interval_seconds: float = Field(default=2.0, ge=1.0, le=10.0)
     realtime_cache_ttl_seconds: int = Field(default=3, ge=1, le=30)
     realtime_max_symbols: int = Field(default=20, ge=1, le=100)
     realtime_max_connections: int = Field(default=200, ge=1, le=10_000)
     kis_ws_url: str = "ws://ops.koreainvestment.com:21000/tryitout"
     kis_ws_reconnect_max_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
+    toss_ws_url: str = "wss://openapi-ws.tossinvest.com/ws/v1"
+    toss_ws_reconnect_max_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
 
     @model_validator(mode="after")
     def validate_feature_dependencies(self):
+        """`validate_feature_dependencies`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         scheduled_symbols = self.scheduled_symbols
         if self.scheduler_enabled and not scheduled_symbols:
             raise ValueError("SCHEDULER_ENABLED requires at least one SCHEDULER_SYMBOLS value")
@@ -130,6 +165,16 @@ class Settings(BaseSettings):
             raise ValueError(
                 "STOCK_PROVIDER=toss requires TOSS_CLIENT_ID and TOSS_CLIENT_SECRET"
             )
+        if self.toss_trading_enabled:
+            admin_key = self.admin_api_key.get_secret_value() if self.admin_api_key else ""
+            if self.stock_provider != "toss" or not self.account_sync_enabled:
+                raise ValueError(
+                    "TOSS_TRADING_ENABLED requires STOCK_PROVIDER=toss and ACCOUNT_SYNC_ENABLED=true"
+                )
+            if len(admin_key) < 32:
+                raise ValueError("TOSS_TRADING_ENABLED requires a 32+ character ADMIN_API_KEY")
+        if self.realtime_enabled and self.realtime_source == "toss" and self.stock_provider != "toss":
+            raise ValueError("REALTIME_SOURCE=toss requires STOCK_PROVIDER=toss")
         dart_key = self.dart_api_key.get_secret_value().strip() if self.dart_api_key else ""
         if (
             self.financial_provider == "dart"
@@ -192,6 +237,8 @@ class Settings(BaseSettings):
         return self
 
     def _active_http_provider_urls(self) -> list[tuple[str, str]]:
+        """`_active_http_provider_urls`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         urls: list[tuple[str, str]] = []
         if self.stock_provider == "toss" or self.account_sync_enabled:
             urls.append(("TOSS_BASE_URL", self.toss_base_url))
@@ -207,22 +254,44 @@ class Settings(BaseSettings):
             urls.append(("KIS_BASE_URL", self.kis_base_url))
         if self.ai_report_provider == "openai":
             urls.append(("OPENAI_BASE_URL", self.openai_base_url))
+        if self.local_ai_enabled:
+            if self.news_training_source in {"gdelt", "both"}:
+                urls.append(("GDELT_DOC_API_URL", self.gdelt_doc_api_url))
+            if self.news_api_key:
+                urls.append(("NEWS_API_BASE_URL", self.news_api_base_url))
+            if self.fred_api_key:
+                urls.append(("FRED_BASE_URL", self.fred_base_url))
+            if self.finra_client_id or self.finra_client_secret:
+                urls.extend(
+                    (
+                        ("FINRA_API_BASE_URL", self.finra_api_base_url),
+                        ("FINRA_TOKEN_URL", self.finra_token_url),
+                    )
+                )
+            if self.sec_user_agent:
+                urls.append(("SEC_BASE_URL", self.sec_base_url))
         return urls
 
     @property
     def allowed_origins(self) -> list[str]:
+        """`allowed_origins`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return [
             origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()
         ]
 
     @property
     def trusted_hosts(self) -> list[str]:
+        """`trusted_hosts`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return list(
             dict.fromkeys(host.strip().casefold() for host in self.allowed_hosts.split(",") if host.strip())
         )
 
     @property
     def scheduled_symbols(self) -> list[str]:
+        """`scheduled_symbols`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return list(
             dict.fromkeys(
                 symbol.strip().upper()
@@ -233,6 +302,8 @@ class Settings(BaseSettings):
 
     @property
     def data_retention_days(self) -> dict[str, int]:
+        """`data_retention_days`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return {
             "data_quality_logs": self.data_quality_retention_days,
             "news": self.news_retention_days,
@@ -242,4 +313,6 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """`get_settings`은(는) 필요한 데이터를 조회해 반환합니다."""
+
     return Settings()

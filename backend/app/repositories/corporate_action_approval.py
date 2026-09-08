@@ -1,3 +1,5 @@
+"""corporate_action_approval 파일은 데이터 저장과 조회 기능을 담당한다."""
+
 import json
 from dataclasses import replace
 from decimal import ROUND_HALF_EVEN, Decimal, DecimalException
@@ -24,6 +26,8 @@ class SqlAlchemyCorporateActionApprovalRepository:
     """Atomically freeze a reviewed candidate and its immutable evidence."""
 
     def __init__(self, sessions: sessionmaker[Session]) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def approve(
@@ -31,6 +35,8 @@ class SqlAlchemyCorporateActionApprovalRepository:
         action: CorporateActionRecord,
         evidence: CorporateActionApprovalEvidence,
     ) -> CorporateActionApprovalResult:
+        """`approve`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         action = self._canonical(action)
         self._validate(action, evidence)
         evidence_hash = self._evidence_hash(action, evidence)
@@ -108,6 +114,8 @@ class SqlAlchemyCorporateActionApprovalRepository:
         action: CorporateActionRecord,
         evidence: CorporateActionApprovalEvidence,
     ) -> str:
+        """`_evidence_hash`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         payload = {
             "source": action.source,
             "symbol": action.symbol,
@@ -129,6 +137,8 @@ class SqlAlchemyCorporateActionApprovalRepository:
 
     @staticmethod
     def _canonical(action: CorporateActionRecord) -> CorporateActionRecord:
+        """`_canonical`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         try:
             return replace(
                 action,
@@ -147,6 +157,8 @@ class SqlAlchemyCorporateActionApprovalRepository:
         action: CorporateActionRecord,
         evidence: CorporateActionApprovalEvidence,
     ) -> None:
+        """`_validate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         timestamps = [action.effective_at, evidence.reviewed_at]
         if action.announced_at is not None:
             timestamps.append(action.announced_at)

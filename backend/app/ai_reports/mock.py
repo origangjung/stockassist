@@ -1,3 +1,5 @@
+"""mock 파일은 백엔드 도메인 기능을 담당한다."""
+
 from app.ai_reports.contracts import AIReportGenerator
 
 
@@ -8,10 +10,13 @@ class MockAIReportGenerator(AIReportGenerator):
     model = "deterministic-report-v1"
 
     def generate(self, facts: dict) -> dict:
+        """`generate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         score = facts.get("score") or {}
         prediction = facts.get("prediction") or {}
         warnings = facts.get("warnings") or []
         chart_patterns = (facts.get("chart_patterns") or {}).get("patterns", [])
+        pressure = facts.get("market_pressure") or {}
         points: list[str] = []
         if score.get("overall_score") is not None:
             points.append(
@@ -28,6 +33,16 @@ class MockAIReportGenerator(AIReportGenerator):
         if chart_patterns:
             names = ", ".join(str(item["name"]) for item in chart_patterns[:3])
             points.append(f"실험 패턴 엔진에서 {names} 패턴이 감지되었습니다.")
+        if pressure.get("signal") in {"buying", "selling", "balanced"}:
+            pressure_label = {
+                "buying": "수요 우위",
+                "selling": "공급 우위",
+                "balanced": "균형",
+            }[pressure["signal"]]
+            points.append(
+                f"최근 호가와 체결의 단기 압력은 {pressure_label}이며 "
+                f"압력 점수는 {float(pressure.get('score', 0)):+.2f}입니다."
+            )
         if not points:
             points.append("종합 설명을 생성하기에 가용 데이터가 부족합니다.")
         return {

@@ -1,3 +1,5 @@
+"""backend.app.corporate_actions 패키지의 공개 구성 요소를 묶는다."""
+
 from app.corporate_actions.contracts import (
     ACTION_STATUSES,
     ACTION_TYPES,

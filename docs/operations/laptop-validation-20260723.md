@@ -47,7 +47,7 @@ are recorded here.
 | Full backend test suite | `295 passed` |
 | ML-marked local tests | `4 passed, 291 deselected` |
 | Ruff (`backend`, `scripts`) | passed |
-| TypeScript (`apps/web`) | passed |
+| TypeScript (`frontend`) | passed |
 | Docker API readiness | `ready` |
 | Nginx health | `ok` |
 | PostgreSQL restore revision | `20260720_0021` matches source |

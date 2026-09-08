@@ -1,3 +1,5 @@
+"""dart_candidates 파일은 백엔드 도메인 기능을 담당한다."""
+
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -19,6 +21,8 @@ class DartCorporateActionCandidateProvider:
     metadata = DART_SOURCE
 
     def __init__(self, dart: DartFinancialProvider) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._dart = dart
 
     @classmethod
@@ -30,6 +34,8 @@ class DartCorporateActionCandidateProvider:
         timeout_seconds: float = 15,
         transport: httpx2.BaseTransport | None = None,
     ) -> "DartCorporateActionCandidateProvider":
+        """`create`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return cls(
             DartFinancialProvider.create(
                 base_url=base_url,
@@ -47,6 +53,8 @@ class DartCorporateActionCandidateProvider:
         end: date,
         limit: int,
     ) -> CorporateActionCandidateFetchResult:
+        """`fetch_candidates`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         corp_code = self._dart.corp_code_for(symbol)
         params = {
             "corp_code": corp_code,
@@ -91,6 +99,8 @@ class DartCorporateActionCandidateProvider:
         candidate_kind: str,
         disclosure_metadata: dict[str, tuple[str | None, str | None]],
     ) -> list[CorporateActionCandidate]:
+        """`_rows`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         payload = self._dart.get_json(path, params)
         status = str(payload.get("status") or "")
         if status == "013":
@@ -121,6 +131,8 @@ class DartCorporateActionCandidateProvider:
         candidate_kind: str,
         disclosure_metadata: tuple[str | None, str | None],
     ) -> CorporateActionCandidate:
+        """`_candidate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         receipt_no = str(row.get("rcept_no") or "").strip()
         if len(receipt_no) != 14 or not receipt_no.isdigit():
             raise ProviderUnavailableError(
@@ -191,6 +203,8 @@ class DartCorporateActionCandidateProvider:
         end: date,
         limit: int,
     ) -> dict[str, tuple[str | None, str | None]]:
+        """`_disclosure_metadata`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         base_params = {
             "corp_code": corp_code,
             "bgn_de": start.strftime("%Y%m%d"),
@@ -239,10 +253,14 @@ class DartCorporateActionCandidateProvider:
         return metadata
 
     def close(self) -> None:
+        """`close`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._dart.close()
 
 
 def _date(value: object, *, required: bool = False) -> date | None:
+    """`_date`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     raw = str(value or "").strip().replace("-", "").replace(".", "")
     if not raw and not required:
         return None
@@ -256,6 +274,8 @@ def _date(value: object, *, required: bool = False) -> date | None:
 
 
 def _decimal(value: object) -> Decimal | None:
+    """`_decimal`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     raw = str(value or "").strip().replace(",", "")
     if not raw or raw == "-":
         return None

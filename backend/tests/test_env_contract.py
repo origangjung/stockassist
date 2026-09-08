@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.check_env_contract import (
+from scripts.operations.check_env_contract import (
     parse_env_template,
     secret_placeholder_violations,
     settings_variables,

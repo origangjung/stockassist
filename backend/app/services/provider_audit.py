@@ -1,3 +1,5 @@
+"""provider_audit 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 import logging
@@ -9,7 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class ProviderAuditHistoryService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(self, repository: ProviderAuditReadRepository | None) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._repository = repository
 
     def recent(
@@ -20,6 +26,8 @@ class ProviderAuditHistoryService:
         provider: str | None = None,
         outcome: str | None = None,
     ) -> dict[str, object]:
+        """`recent`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self._repository is None:
             return {
                 "persistence_status": "disabled",
@@ -44,6 +52,8 @@ class ProviderAuditHistoryService:
 
 
 class ProviderAuditMaintenanceService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(
         self,
         repository: ProviderAuditMaintenanceRepository | None,
@@ -52,6 +62,8 @@ class ProviderAuditMaintenanceService:
         retention_days: int,
         cleanup_hour_kst: int,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._repository = repository
         self._enabled = enabled
         self._retention_days = retention_days
@@ -63,6 +75,8 @@ class ProviderAuditMaintenanceService:
         self._last_error_type: str | None = None
 
     def cleanup(self, now: datetime | None = None) -> dict[str, object]:
+        """`cleanup`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not self._enabled or self._repository is None:
             return self.status()
         run_at = now or datetime.now(UTC)
@@ -95,6 +109,8 @@ class ProviderAuditMaintenanceService:
         return self.status()
 
     def status(self) -> dict[str, object]:
+        """`status`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._lock:
             if not self._enabled or self._repository is None:
                 status = "disabled"

@@ -1,3 +1,5 @@
+"""lightweight 파일은 백엔드 도메인 기능을 담당한다."""
+
 from datetime import timezone
 from decimal import Decimal
 from hashlib import sha256
@@ -15,6 +17,8 @@ class LightweightPredictionEngine:
     algorithm = "lightweight_momentum"
 
     def predict(self, symbol: str, candles: list[Candle], *, horizon_days: int) -> PredictionResult:
+        """`predict`은(는) 입력 데이터를 기준으로 모델 또는 규칙의 결과 값을 계산해 반환합니다."""
+
         ordered = sorted(candles, key=lambda candle: candle.timestamp)
         if len(ordered) < 30:
             raise ValueError("at least 30 candles are required for lightweight prediction")
@@ -50,4 +54,6 @@ class LightweightPredictionEngine:
 
 
 def _decimal(value: float) -> Decimal:
+    """`_decimal`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return Decimal(str(round(value, 6)))

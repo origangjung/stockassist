@@ -1,3 +1,5 @@
+"""memory 파일은 데이터 저장과 조회 기능을 담당한다."""
+
 from dataclasses import replace
 from datetime import datetime, timezone
 
@@ -25,15 +27,25 @@ from app.providers.contracts import BrokerAccount, HoldingsSnapshot
 
 
 class InMemoryStockRepository(StockRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: dict[str, StockInfo] = {}
 
     def upsert(self, stock: StockInfo) -> None:
+        """`upsert`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self.items[stock.symbol] = stock
 
 
 class InMemoryCandleRepository(CandleRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: dict[tuple[str, str, str, str], dict[object, Candle]] = {}
         self.sources: dict[tuple[str, str, str, str], dict[object, str]] = {}
         self.price_basis_rules: dict[tuple[str, str, str, str], dict[object, str]] = {}
@@ -49,6 +61,8 @@ class InMemoryCandleRepository(CandleRepository):
         source_provider: str,
         price_basis_rule_version: str,
     ) -> None:
+        """`save_many`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         if not source_provider or len(source_provider) > 32:
             raise ValueError("Candle source provider must contain 1 to 32 characters")
         if not price_basis_rule_version or len(price_basis_rule_version) > 32:
@@ -63,6 +77,8 @@ class InMemoryCandleRepository(CandleRepository):
             rules[candle.timestamp] = price_basis_rule_version
 
     def find(self, symbol: str, *, interval: str, stage: str, limit: int) -> list[Candle]:
+        """`find`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         matches: list[Candle] = []
         for (stored_symbol, stored_interval, stored_stage, _), values in self.items.items():
             if (stored_symbol, stored_interval, stored_stage) == (symbol, interval, stage):
@@ -75,6 +91,8 @@ class InMemoryCandleRepository(CandleRepository):
         symbol: str,
         limit: int = 200,
     ) -> CandlePriceBasisInventory:
+        """`price_basis_inventory`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         groups: dict[tuple[str, str, str, str, str, str], list[object]] = {}
         for key, values in self.items.items():
             stored_symbol, interval, stage, aggregation_version = key
@@ -122,58 +140,94 @@ class InMemoryCandleRepository(CandleRepository):
 
 
 class InMemoryQualityLogRepository(QualityLogRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: list[tuple[str, DataQualityLog]] = []
 
     def save_many(self, symbol: str, logs: list[DataQualityLog]) -> None:
+        """`save_many`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         self.items.extend((symbol, log) for log in logs)
 
 
 class InMemoryFinancialRepository(FinancialRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: dict[tuple[str, int, str, str], FinancialSnapshot] = {}
 
     def save(self, snapshot: FinancialSnapshot, *, source: str) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         del source
         key = (snapshot.symbol, snapshot.fiscal_year, snapshot.report_code, snapshot.statement_type)
         self.items[key] = snapshot
 
 
 class InMemoryDisclosureRepository(DisclosureRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: dict[str, Disclosure] = {}
 
     def save_many(self, disclosures: list[Disclosure], *, source: str) -> None:
+        """`save_many`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         del source
         for disclosure in disclosures:
             self.items[disclosure.receipt_no] = disclosure
 
 
 class InMemoryNewsRepository(NewsRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: dict[str, NewsArticle] = {}
 
     def save_many(self, articles: list[NewsArticle], *, source: str) -> None:
+        """`save_many`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         del source
         for article in articles:
             self.items[article.url] = article
 
 
 class InMemoryInvestorFlowRepository(InvestorFlowRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: dict[tuple[str, object], InvestorFlow] = {}
 
     def save(self, flow: InvestorFlow, *, source: str) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         del source
         self.items[(flow.symbol, flow.as_of_date)] = flow
 
 
 class InMemoryPredictionRepository(PredictionRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: list[PredictionResult] = []
         self.versions: dict[str, ModelVersionRecord] = {}
 
     def save(self, prediction: PredictionResult, *, algorithm: str) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self.items.append(prediction)
         self.versions.setdefault(
             prediction.model_version,
@@ -198,6 +252,8 @@ class InMemoryPredictionRepository(PredictionRepository):
         algorithm: str | None = None,
         horizon_days: int | None = None,
     ) -> tuple[list[ModelVersionRecord], int]:
+        """`list_versions`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         matches = [
             record
             for record in self.versions.values()
@@ -209,9 +265,13 @@ class InMemoryPredictionRepository(PredictionRepository):
         return matches[offset : offset + limit], len(matches)
 
     def get_version(self, version: str) -> ModelVersionRecord | None:
+        """`get_version`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         return self.versions.get(version)
 
     def promote(self, version: str) -> ModelVersionRecord | None:
+        """`promote`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         target = self.versions.get(version)
         if target is None:
             return None
@@ -233,21 +293,33 @@ class InMemoryPredictionRepository(PredictionRepository):
 
 
 class InMemoryAIReportRepository(AIReportRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.items: list[dict] = []
 
     def save(self, report: dict) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self.items.append(report)
 
 
 class InMemoryPortfolioRepository(PortfolioRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.accounts: dict[tuple[str, int], BrokerAccount] = {}
         self.snapshots: dict[tuple[str, int], HoldingsSnapshot] = {}
 
     def save_snapshot(
         self, provider: str, account: BrokerAccount, snapshot: HoldingsSnapshot
     ) -> None:
+        """`save_snapshot`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         key = (provider, account.account_seq)
         self.accounts[key] = account
         self.snapshots[key] = snapshot

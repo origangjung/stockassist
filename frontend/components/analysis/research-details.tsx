@@ -1,0 +1,361 @@
+"use client";
+
+/** research-details 파일은 AI 분석 진행과 결과 화면 기능을 담당한다. */
+
+import { useQuery } from "@tanstack/react-query";
+import { KeyboardEvent, useRef, useState } from "react";
+import {
+  fetchDisclosures,
+  fetchFinancials,
+  fetchValuation,
+  fetchInvestorFlow,
+  fetchNews,
+  type DisclosureAnalysis,
+  type FinancialSnapshot,
+  type ValuationAnalysis,
+  type InvestorFlow,
+  type NewsAnalysis,
+} from "../../lib/market-api";
+
+type ResearchTab = "financials" | "flow" | "news" | "disclosures";
+
+const tabs: Array<{ id: ResearchTab; label: string; note: string }> = [
+  { id: "financials", label: "재무", note: "연간 주요 계정" },
+  { id: "flow", label: "수급", note: "투자자별 순매매" },
+  { id: "news", label: "뉴스", note: "기사 감성 요약" },
+  { id: "disclosures", label: "공시", note: "최근 90일" },
+];
+
+const flowSignalLabels: Record<InvestorFlow["reference_signal"], string> = {
+  net_inflow: "외국인·기관 합산 순유입",
+  net_outflow: "외국인·기관 합산 순유출",
+  balanced: "외국인·기관 수급 균형",
+};
+
+const sentimentLabels: Record<NewsAnalysis["sentiment_label"], string> = {
+  positive: "긍정 비중 우세",
+  negative: "부정 비중 우세",
+  neutral: "중립",
+};
+
+/** `finite`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function finite(value: string | number | null | undefined): number | null {
+  if (value == null) return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** `formatAmount`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function formatAmount(value: string | number | null, currency: string): string {
+  const parsed = finite(value);
+  if (parsed == null) return "자료 없음";
+  const formatter = new Intl.NumberFormat(currency === "KRW" ? "ko-KR" : "en-US", {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  });
+  return `${currency === "USD" ? "$" : "₩"}${formatter.format(parsed)}`;
+}
+
+/** `formatQuantity`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function formatQuantity(value: string | number | null): string {
+  const parsed = finite(value);
+  if (parsed == null) return "자료 없음";
+  const sign = parsed > 0 ? "+" : "";
+  return `${sign}${new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 2 }).format(parsed)}주`;
+}
+
+/** `formatDate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("ko-KR");
+}
+
+/** `safeExternalUrl`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function safeExternalUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** `ResearchState`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function ResearchState({
+  kind,
+  message,
+  retry,
+}: {
+  kind: "loading" | "error" | "empty";
+  message: string;
+  retry?: () => void;
+}) {
+  return (
+    <div
+      aria-live={kind === "error" ? "assertive" : "polite"}
+      /** Name 클래스는 AI 분석 진행과 결과 표현을 담당합니다.의 상태와 동작을 캡슐화합니다. */
+      className={`research-state ${kind}`}
+      role={kind === "error" ? "alert" : "status"}
+    >
+      <span>{message}</span>
+      {retry && <button type="button" onClick={retry}>다시 시도</button>}
+    </div>
+  );
+}
+
+/** `FinancialPanel`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function FinancialPanel({ data }: { data: FinancialSnapshot }) {
+  const metrics = [
+    ["매출액", data.revenue],
+    ["영업이익", data.operating_income],
+    ["당기순이익", data.net_income],
+    ["자산총계", data.total_assets],
+    ["부채총계", data.total_liabilities],
+    ["자본총계", data.total_equity],
+  ] as const;
+  return (
+    <>
+      <div className="research-metrics">
+        {metrics.map(([label, value]) => (
+          <article key={label}><span>{label}</span><strong>{formatAmount(value, data.currency)}</strong></article>
+        ))}
+      </div>
+      <ResearchFooter provider={data.provider} dataAsOf={data.data_as_of} detail={`${data.fiscal_year}년 · ${data.statement_type}`} />
+    </>
+  );
+}
+
+/** `ValuationPanel`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function ValuationPanel({ data }: { data: ValuationAnalysis }) {
+  const ratio = (value: string | number | null, suffix = "배") => {
+    const parsed = finite(value);
+    return parsed == null ? "산출 불가" : `${parsed.toFixed(2)}${suffix}`;
+  };
+  const metrics = [
+    ["PER", ratio(data.per)],
+    ["PBR", ratio(data.pbr)],
+    ["PSR", ratio(data.psr)],
+    ["ROE", ratio(data.roe == null ? null : Number(data.roe) * 100, "%")],
+  ];
+  return (
+    <section className="valuation-block" aria-label="시점 기준 밸류에이션">
+      <header><span>POINT-IN-TIME VALUATION · EXPERIMENTAL</span><small>음수 또는 결측 분모는 산출하지 않습니다.</small></header>
+      <div className="research-metrics valuation">
+        {metrics.map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}
+      </div>
+      <ResearchFooter
+        provider={`${data.financial_source} + ${data.quote_provider}`}
+        dataAsOf={data.financial_data_as_of}
+        detail={`시가총액 ${formatAmount(data.market_cap, data.currency ?? "KRW")} · 미산출 ${data.unavailable_metrics.length}개`}
+      />
+    </section>
+  );
+}
+
+/** `FlowPanel`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function FlowPanel({ data }: { data: InvestorFlow }) {
+  const signalClass = data.reference_signal === "net_inflow" ? "positive" : data.reference_signal === "net_outflow" ? "negative" : "neutral";
+  return (
+    <>
+      <div className={`research-signal ${signalClass}`}>
+        <span>REFERENCE FLOW</span><strong>{flowSignalLabels[data.reference_signal]}</strong>
+        <small>수급 방향을 설명하는 실험 상태 참고 정보이며 매매 지시가 아닙니다.</small>
+      </div>
+      <div className="research-metrics flow">
+        <article><span>외국인 순매매</span><strong>{formatQuantity(data.foreign_net_quantity)}</strong></article>
+        <article><span>기관 순매매</span><strong>{formatQuantity(data.institution_net_quantity)}</strong></article>
+        <article><span>개인 순매매</span><strong>{formatQuantity(data.individual_net_quantity)}</strong></article>
+        <article><span>외국인·기관 합산</span><strong>{formatQuantity(data.foreign_institution_net_quantity)}</strong></article>
+        <article><span>외국인 보유율</span><strong>{finite(data.foreign_holding_rate) == null ? "자료 없음" : `${finite(data.foreign_holding_rate)?.toFixed(2)}%`}</strong></article>
+      </div>
+      <ResearchFooter provider={data.provider} dataAsOf={data.data_as_of} detail={`${data.as_of_date} 기준 · 국내 종목 데이터`} />
+    </>
+  );
+}
+
+/** `NewsPanel`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function NewsPanel({ data }: { data: NewsAnalysis }) {
+  return (
+    <>
+      <div className={`research-signal ${data.sentiment_label}`}>
+        <span>EXPERIMENTAL SENTIMENT</span><strong>{sentimentLabels[data.sentiment_label]}</strong>
+        <small>감성 점수 {data.sentiment_score.toFixed(3)} · 제목과 요약에 대한 규칙 기반 분석</small>
+      </div>
+      {data.articles.length === 0 ? <ResearchState kind="empty" message="최근 수집된 뉴스가 없습니다." /> : (
+        <div className="research-list">
+          {data.articles.map((article) => {
+            const href = safeExternalUrl(article.url);
+            return (
+              <article key={`${article.url}-${article.published_at}`}>
+                <div><span>{article.publisher} · {formatDate(article.published_at)}</span><small>감성 {article.sentiment_score.toFixed(2)}</small></div>
+                {href ? <a href={href} target="_blank" rel="noopener noreferrer">{article.title}</a> : <strong>{article.title}</strong>}
+                {article.summary && <p>{article.summary}</p>}
+              </article>
+            );
+          })}
+        </div>
+      )}
+      <ResearchFooter provider={data.provider} detail={`${data.articles.length}건 · 데이터 저장 ${data.persistence_status}`} />
+    </>
+  );
+}
+
+/** `DisclosurePanel`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function DisclosurePanel({ data }: { data: DisclosureAnalysis }) {
+  return (
+    <>
+      {data.risk_flags.length > 0 && <div className="risk-flags"><b>검토 필요</b>{data.risk_flags.map((flag) => <span key={flag}>{flag}</span>)}</div>}
+      {data.disclosures.length === 0 ? <ResearchState kind="empty" message="최근 90일 내 수집된 공시가 없습니다." /> : (
+        <div className="research-list disclosures">
+          {data.disclosures.map((item) => {
+            const href = safeExternalUrl(item.document_url);
+            return (
+              <article key={item.receipt_no}>
+                <div><span>{formatDate(item.filed_at)} · {item.filer_name}</span><small className={item.risk_level}>{item.risk_level === "high" ? "위험 키워드 감지" : "일반"}</small></div>
+                {href ? <a href={href} target="_blank" rel="noopener noreferrer">{item.report_name}</a> : <strong>{item.report_name}</strong>}
+                {item.remarks && <p>{item.remarks}</p>}
+              </article>
+            );
+          })}
+        </div>
+      )}
+      <ResearchFooter provider={data.provider} detail={`${data.disclosures.length}건 · EXPERIMENTAL`} />
+    </>
+  );
+}
+
+/** `ResearchFooter`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+function ResearchFooter({ provider, dataAsOf, detail }: { provider: string; dataAsOf?: string; detail: string }) {
+  return <footer className="research-footer"><span>{provider} · {detail}</span>{dataAsOf && <span>기준 {formatDate(dataAsOf)}</span>}</footer>;
+}
+
+/** `ResearchDetails`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
+export function ResearchDetails({
+  symbol,
+  currency,
+  market,
+}: {
+  symbol: string;
+  currency: string;
+  market: string;
+}) {
+  const [activeTab, setActiveTab] = useState<ResearchTab>("financials");
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const fiscalYear = new Date().getFullYear() - 1;
+  const supportsDomesticResearch = market === "KOSPI" || market === "KOSDAQ";
+  const activeTabNeedsDomesticData = activeTab === "flow" || activeTab === "disclosures";
+  const activeTabUnavailable = activeTabNeedsDomesticData && !supportsDomesticResearch;
+  const financials = useQuery({
+    queryKey: ["research", "financials", symbol, fiscalYear],
+    queryFn: ({ signal }) => fetchFinancials(symbol, fiscalYear, signal),
+    enabled: activeTab === "financials" && supportsDomesticResearch,
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+  const valuation = useQuery({
+    queryKey: ["research", "valuation", symbol, fiscalYear],
+    queryFn: ({ signal }) => fetchValuation(symbol, fiscalYear, signal),
+    enabled: activeTab === "financials",
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+  const flow = useQuery({
+    queryKey: ["research", "flow", symbol],
+    queryFn: ({ signal }) => fetchInvestorFlow(symbol, signal),
+    enabled: activeTab === "flow" && supportsDomesticResearch && currency === "KRW",
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const news = useQuery({
+    queryKey: ["research", "news", symbol],
+    queryFn: ({ signal }) => fetchNews(symbol, signal),
+    enabled: activeTab === "news",
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+  const disclosures = useQuery({
+    queryKey: ["research", "disclosures", symbol],
+    queryFn: ({ signal }) => fetchDisclosures(symbol, signal),
+    enabled: activeTab === "disclosures" && supportsDomesticResearch,
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+  const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab);
+  const panelId = `research-panel-${symbol}`;
+  const tabId = (tab: ResearchTab) => `research-tab-${tab}-${symbol}`;
+
+  const activateTab = (index: number) => {
+    const nextTab = tabs[index];
+    if (!nextTab) return;
+    setActiveTab(nextTab.id);
+    tabRefs.current[index]?.focus();
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      activateTab((index + 1) % tabs.length);
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      activateTab((index - 1 + tabs.length) % tabs.length);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      activateTab(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      activateTab(tabs.length - 1);
+    }
+  };
+
+  return (
+    <section className="research-details">
+      <header className="research-heading">
+        <div><span>FUNDAMENTAL · CONTENT · FLOW</span><h3>기업·시장 리서치</h3></div>
+        <small>{supportsDomesticResearch ? "선택한 탭만 조회해 데이터 사용량을 줄입니다." : "해외 종목은 뉴스 탭을 우선 제공합니다."}</small>
+      </header>
+      <div className="research-tabs" role="tablist" aria-label="기업 리서치 분류">
+        {tabs.map((tab, index) => (
+          <button
+            aria-controls={panelId}
+            aria-selected={activeTab === tab.id}
+            id={tabId(tab.id)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(event) => handleTabKeyDown(event, index)}
+            ref={(element) => { tabRefs.current[index] = element; }}
+            role="tab"
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            type="button"
+          >
+            <b>{tab.label}</b><small>{tab.note}</small>
+          </button>
+        ))}
+      </div>
+      <div
+        aria-busy={
+          (activeTab === "financials" && (valuation.isPending || (supportsDomesticResearch && financials.isPending)))
+          || (activeTab === "flow" && supportsDomesticResearch && currency === "KRW" && flow.isPending)
+          || (activeTab === "news" && news.isPending)
+          || (activeTab === "disclosures" && supportsDomesticResearch && disclosures.isPending)
+        }
+        aria-labelledby={tabId(tabs[activeTabIndex]?.id ?? "financials")}
+        /** Name 클래스는 AI 분석 진행과 결과 표현을 담당합니다.의 상태와 동작을 캡슐화합니다. */
+        className="research-panel"
+        id={panelId}
+        role="tabpanel"
+      >
+        {activeTabUnavailable && <ResearchState kind="empty" message="현재 선택한 해외 종목에는 이 데이터 소스가 아직 연동되지 않았습니다. 뉴스 분석은 이용할 수 있습니다." />}
+        {activeTab === "financials" && !activeTabUnavailable && (
+          valuation.isPending || (supportsDomesticResearch && financials.isPending)
+            ? <ResearchState kind="loading" message="재무와 밸류에이션 정보를 불러오는 중입니다." />
+            : valuation.isError
+              ? <ResearchState kind="error" message={valuation.error.message} retry={() => { void valuation.refetch(); }} />
+              : <>{supportsDomesticResearch && financials.data && <FinancialPanel data={financials.data} />}<ValuationPanel data={valuation.data} /></>
+        )}
+        {activeTab === "flow" && !activeTabUnavailable && (flow.isPending ? <ResearchState kind="loading" message="투자자 수급을 불러오는 중입니다." /> : flow.isError ? <ResearchState kind="error" message={flow.error.message} retry={() => { void flow.refetch(); }} /> : <FlowPanel data={flow.data} />)}
+        {activeTab === "news" && (news.isPending ? <ResearchState kind="loading" message="뉴스 분석을 불러오는 중입니다." /> : news.isError ? <ResearchState kind="error" message={news.error.message} retry={() => { void news.refetch(); }} /> : <NewsPanel data={news.data} />)}
+        {activeTab === "disclosures" && !activeTabUnavailable && (disclosures.isPending ? <ResearchState kind="loading" message="공시를 불러오는 중입니다." /> : disclosures.isError ? <ResearchState kind="error" message={disclosures.error.message} retry={() => { void disclosures.refetch(); }} /> : <DisclosurePanel data={disclosures.data} />)}
+      </div>
+    </section>
+  );
+}

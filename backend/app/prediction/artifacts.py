@@ -1,3 +1,5 @@
+"""artifacts 파일은 백엔드 도메인 기능을 담당한다."""
+
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -18,6 +20,8 @@ _MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 
 @dataclass(frozen=True)
 class ModelArtifactManifest:
+    """`ModelArtifactManifest` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     version: str
     symbol: str
     algorithm: str
@@ -33,6 +37,8 @@ class ModelArtifactStore:
     """Immutable model artifacts with checksum-verified atomic activation pointers."""
 
     def __init__(self, root: str | Path) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._root = Path(root).expanduser().resolve()
         self._staged = self._root / "staged"
         self._active = self._root / "active"
@@ -49,6 +55,8 @@ class ModelArtifactStore:
         validation_metrics: dict[str, float],
         write_artifact: Callable[[Path], None],
     ) -> ModelArtifactManifest:
+        """`stage`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         version = self._validate_version(version)
         symbol = self._validate_symbol(symbol)
         algorithm = self._validate_algorithm(algorithm)
@@ -102,6 +110,8 @@ class ModelArtifactStore:
         algorithm: str | None = None,
         horizon_days: int | None = None,
     ) -> ModelArtifactManifest:
+        """`verify`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         version = self._validate_version(version)
         with self._lock:
             manifest_path = self._staged / version / "manifest.json"
@@ -129,6 +139,8 @@ class ModelArtifactStore:
         algorithm: str,
         horizon_days: int,
     ) -> ModelArtifactManifest:
+        """`activate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._lock:
             manifest = self.verify(
                 version,
@@ -156,6 +168,8 @@ class ModelArtifactStore:
         algorithm: str,
         horizon_days: int,
     ) -> ModelArtifactManifest:
+        """`rollback`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._lock:
             pointer_path = self._pointer_path(symbol, algorithm, horizon_days)
             if not pointer_path.exists():
@@ -191,6 +205,8 @@ class ModelArtifactStore:
         algorithm: str,
         horizon_days: int,
     ) -> ModelArtifactManifest | None:
+        """`current`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._lock:
             pointer_path = self._pointer_path(symbol, algorithm, horizon_days)
             if not pointer_path.exists():
@@ -207,12 +223,16 @@ class ModelArtifactStore:
             )
 
     def artifact_path(self, manifest: ModelArtifactManifest) -> Path:
+        """`artifact_path`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return self._safe_artifact_path(
             self._staged / self._validate_version(manifest.version),
             manifest.artifact_file,
         )
 
     def _pointer_path(self, symbol: str, algorithm: str, horizon_days: int) -> Path:
+        """`_pointer_path`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         symbol = self._validate_symbol(symbol)
         algorithm = self._validate_algorithm(algorithm)
         scope = f"{symbol}|{algorithm}|{horizon_days}"
@@ -225,6 +245,8 @@ class ModelArtifactStore:
         algorithm: str,
         horizon_days: int,
     ) -> None:
+        """`_assert_scope`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if (manifest.symbol, manifest.algorithm, manifest.horizon_days) != (
             symbol,
             algorithm,
@@ -233,6 +255,8 @@ class ModelArtifactStore:
             raise ModelArtifactValidationError("Model artifact scope does not match registry metadata")
 
     def _safe_artifact_path(self, directory: Path, relative_name: str) -> Path:
+        """`_safe_artifact_path`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if Path(relative_name).name != relative_name:
             raise ModelArtifactValidationError("Model artifact path must be a plain file name")
         path = (directory / relative_name).resolve(strict=True)
@@ -246,6 +270,8 @@ class ModelArtifactStore:
 
     @staticmethod
     def _validate_artifact_file(path: Path) -> None:
+        """`_validate_artifact_file`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         if not path.is_file() or path.is_symlink():
             raise ModelArtifactValidationError("Model artifact must be a regular file")
         size = path.stat().st_size
@@ -254,6 +280,8 @@ class ModelArtifactStore:
 
     @staticmethod
     def _sha256(path: Path) -> str:
+        """`_sha256`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         digest = sha256()
         with path.open("rb") as source:
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
@@ -261,6 +289,8 @@ class ModelArtifactStore:
         return digest.hexdigest()
 
     def _read_manifest(self, path: Path) -> ModelArtifactManifest:
+        """`_read_manifest`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         payload = self._read_json(path)
         try:
             return ModelArtifactManifest(
@@ -282,6 +312,8 @@ class ModelArtifactStore:
 
     @staticmethod
     def _read_json(path: Path) -> dict:
+        """`_read_json`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         try:
             if path.stat().st_size > _MAX_MANIFEST_BYTES:
                 raise ModelArtifactValidationError("Model artifact metadata is too large")
@@ -294,6 +326,8 @@ class ModelArtifactStore:
 
     @staticmethod
     def _atomic_json_write(path: Path, payload: dict) -> None:
+        """`_atomic_json_write`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
         try:
@@ -307,12 +341,16 @@ class ModelArtifactStore:
 
     @staticmethod
     def _validate_version(version: str) -> str:
+        """`_validate_version`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         if not _VERSION_PATTERN.fullmatch(version):
             raise ValueError("Invalid model artifact version")
         return version
 
     @staticmethod
     def _validate_symbol(symbol: str) -> str:
+        """`_validate_symbol`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         normalized = symbol.strip().upper()
         if not _SYMBOL_PATTERN.fullmatch(normalized):
             raise ValueError("Invalid model artifact symbol")
@@ -320,6 +358,8 @@ class ModelArtifactStore:
 
     @staticmethod
     def _validate_algorithm(algorithm: str) -> str:
+        """`_validate_algorithm`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         normalized = algorithm.strip().casefold()
         if not re.fullmatch(r"[a-z0-9_-]{1,32}", normalized):
             raise ValueError("Invalid model artifact algorithm")
@@ -327,4 +367,6 @@ class ModelArtifactStore:
 
 
 class ModelArtifactValidationError(RuntimeError):
+    """해당 실패 조건을 호출 계층에 구분해 전달하는 예외입니다."""
+
     pass

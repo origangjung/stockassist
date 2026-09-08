@@ -1,3 +1,5 @@
+"""dart_mapping 파일은 백엔드 도메인 기능을 담당한다."""
+
 from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -24,6 +26,8 @@ class DartCorporateActionMapper:
         effective_at: datetime,
         status: str = "announced",
     ) -> CorporateActionRecord:
+        """`map_bonus_issue`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         ratio = self._positive_decimal(row, "fric_nstk_ascnt_ps_ostk")
         multiplier = Decimal(1) + ratio
         return self._record(
@@ -51,6 +55,8 @@ class DartCorporateActionMapper:
         proportional_share_consolidation: bool,
         status: str = "announced",
     ) -> CorporateActionRecord:
+        """`map_proportional_capital_reduction`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not proportional_share_consolidation:
             raise ValueError(
                 "DART capital reduction requires reviewed proportional consolidation evidence"
@@ -87,6 +93,8 @@ class DartCorporateActionMapper:
         volume_factor: Decimal,
         status: str,
     ) -> CorporateActionRecord:
+        """`_record`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         DartCorporateActionMapper._require_aware(known_at)
         DartCorporateActionMapper._require_aware(effective_at)
         if not symbol or not event_id or revision < 1 or status not in ACTION_STATUSES:
@@ -108,6 +116,8 @@ class DartCorporateActionMapper:
 
     @staticmethod
     def _positive_decimal(row: Mapping[str, object], field: str) -> Decimal:
+        """`_positive_decimal`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         raw = str(row.get(field) or "").replace(",", "").strip()
         try:
             value = Decimal(raw)
@@ -119,6 +129,8 @@ class DartCorporateActionMapper:
 
     @staticmethod
     def _optional_date(value: object) -> datetime | None:
+        """`_optional_date`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         raw = str(value or "").strip().replace("-", "").replace(".", "")
         if not raw:
             return None
@@ -130,5 +142,7 @@ class DartCorporateActionMapper:
 
     @staticmethod
     def _require_aware(value: datetime) -> None:
+        """`_require_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("DART corporate action timestamps must be timezone-aware")

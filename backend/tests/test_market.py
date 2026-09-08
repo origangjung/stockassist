@@ -71,7 +71,7 @@ def test_pattern_endpoint_returns_experimental_structured_analysis():
 
     assert response.status_code == 200
     assert body["provider"] == "mock"
-    assert body["engine_version"] == "patterns-2026.1"
+    assert body["engine_version"] == "patterns-2026.2"
     assert body["validation_status"] == "experimental"
     assert isinstance(body["patterns"], list)
 
@@ -93,6 +93,18 @@ def test_financial_endpoint_returns_normalized_snapshot():
     assert body["symbol"] == "005930"
     assert body["provider"] == "mock"
     assert body["revenue"] is not None
+
+
+def test_valuation_endpoint_returns_point_in_time_ratios():
+    response = client.get("/api/v1/stocks/005930/valuation?fiscal_year=2025")
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["per"] is not None
+    assert body["pbr"] is not None
+    assert body["psr"] is not None
+    assert body["roe"] is not None
+    assert body["methodology"].startswith("point_in_time")
+    assert body["experimental"] is True
 
 
 def test_content_endpoints_are_experimental():

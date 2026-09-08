@@ -1,3 +1,5 @@
+"""backend.app.observability 패키지의 공개 구성 요소를 묶는다."""
+
 from app.observability.health import DependencySpec, HealthService, build_health_service
 from app.observability.metrics import MetricsMiddleware, metrics_app
 from app.observability.logging import configure_logging

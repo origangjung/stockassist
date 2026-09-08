@@ -1,3 +1,5 @@
+"""market 파일은 데이터베이스 영속 모델 기능을 담당한다."""
+
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -18,6 +20,8 @@ from app.database.base import Base
 
 
 class StockModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "stocks"
 
     symbol: Mapped[str] = mapped_column(String(16), primary_key=True)
@@ -32,6 +36,8 @@ class StockModel(Base):
 
 
 class StockCandleModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "stock_candles"
     __table_args__ = (
         UniqueConstraint(
@@ -82,6 +88,8 @@ class StockCandleModel(Base):
 
 
 class DataQualityLogModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "data_quality_logs"
     __table_args__ = (
         Index("ix_quality_logs_symbol_created", "symbol", "created_at"),

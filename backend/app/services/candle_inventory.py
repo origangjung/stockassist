@@ -1,3 +1,5 @@
+"""candle_inventory 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from dataclasses import asdict
 
 from app.repositories.contracts import CandleRepository
@@ -7,6 +9,8 @@ class CandlePriceBasisInventoryService:
     """Read-only evidence inventory for safe candle price-basis classification."""
 
     def __init__(self, repository: CandleRepository | None) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._repository = repository
 
     def summarize(
@@ -15,6 +19,8 @@ class CandlePriceBasisInventoryService:
         symbol: str,
         limit: int = 200,
     ) -> dict[str, object]:
+        """`summarize`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self._repository is None:
             return {
                 "persistence_status": "disabled",
@@ -60,6 +66,8 @@ class CandlePriceBasisInventoryService:
 
     @staticmethod
     def _review_item(item: dict[str, object]) -> dict[str, object]:
+        """`_review_item`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         requirements = []
         if item["source_provider"] == "legacy_unknown":
             requirements.extend(

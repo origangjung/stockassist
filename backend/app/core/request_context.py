@@ -1,3 +1,5 @@
+"""request_context 파일은 백엔드 도메인 기능을 담당한다."""
+
 from contextvars import ContextVar
 import re
 from uuid import uuid4
@@ -14,12 +16,18 @@ logger = structlog.get_logger(__name__)
 
 
 def current_request_id() -> str:
+    """`current_request_id`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     request_id = _request_id.get()
     return request_id if request_id is not None else str(uuid4())
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
+    """요청과 응답 사이에서 공통 정책을 적용하는 미들웨어입니다."""
+
     async def dispatch(self, request: Request, call_next):
+        """`dispatch`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         supplied = request.headers.get("X-Request-ID", "")
         request_id = supplied if _SAFE_REQUEST_ID.fullmatch(supplied) else str(uuid4())
         token = _request_id.set(request_id)

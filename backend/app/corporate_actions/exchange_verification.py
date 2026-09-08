@@ -1,3 +1,5 @@
+"""exchange_verification 파일은 백엔드 도메인 기능을 담당한다."""
+
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -11,6 +13,8 @@ VERIFICATION_ROLES = frozenset({"primary", "crosscheck", "not_suitable"})
 
 
 def _is_authoritative_https_url(value: str, *, expected_host: str | None = None) -> bool:
+    """`_is_authoritative_https_url`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
     parsed = urlsplit(value)
     try:
         port = parsed.port
@@ -28,15 +32,21 @@ def _is_authoritative_https_url(value: str, *, expected_host: str | None = None)
 
 
 class ExchangeVerificationSourceNotFoundError(LookupError):
+    """해당 실패 조건을 호출 계층에 구분해 전달하는 예외입니다."""
+
     pass
 
 
 class ExchangeVerificationUnavailableError(RuntimeError):
+    """해당 실패 조건을 호출 계층에 구분해 전달하는 예외입니다."""
+
     pass
 
 
 @dataclass(frozen=True)
 class ExchangeVerificationMetadata:
+    """`ExchangeVerificationMetadata` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     name: str
     authority: str
     markets: tuple[str, ...]
@@ -50,6 +60,8 @@ class ExchangeVerificationMetadata:
     reference_url: str
 
     def __post_init__(self) -> None:
+        """`__post_init__`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if (
             not re.fullmatch(r"[a-z0-9_-]{1,40}", self.name)
             or not self.authority.strip()
@@ -70,6 +82,8 @@ class ExchangeVerificationMetadata:
 
 @dataclass(frozen=True)
 class ExchangeVerificationResult:
+    """계산 또는 처리 결과를 묶어 전달하는 값 객체입니다."""
+
     source: str
     symbol: str
     action_type: str
@@ -82,6 +96,8 @@ class ExchangeVerificationResult:
 
 
 class ExchangeVerificationProvider(Protocol):
+    """`ExchangeVerificationProvider` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     metadata: ExchangeVerificationMetadata
 
     def verify_effective_date(
@@ -195,6 +211,8 @@ class CorporateActionExchangeVerificationService:
         providers: list[ExchangeVerificationProvider] | None = None,
         candidates: tuple[ExchangeVerificationMetadata, ...] = EXCHANGE_VERIFICATION_CANDIDATES,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._providers: dict[str, ExchangeVerificationProvider] = {}
         self._candidates = candidates
         for provider in providers or []:
@@ -204,6 +222,8 @@ class CorporateActionExchangeVerificationService:
             self._providers[metadata.name] = provider
 
     def status(self) -> dict[str, object]:
+        """`status`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         verified = [
             provider.metadata
             for provider in self._providers.values()
@@ -233,6 +253,8 @@ class CorporateActionExchangeVerificationService:
         *,
         effective_at: datetime,
     ) -> ExchangeVerificationResult:
+        """`verify`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._require_aware(effective_at)
         provider = self._providers.get(source)
         if provider is None:
@@ -260,6 +282,8 @@ class CorporateActionExchangeVerificationService:
         action_type: str,
         effective_at: datetime,
     ) -> None:
+        """`_validate_result`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         cls._require_aware(result.requested_effective_at)
         cls._require_aware(result.matched_effective_at)
         cls._require_aware(result.fetched_at)
@@ -285,5 +309,7 @@ class CorporateActionExchangeVerificationService:
 
     @staticmethod
     def _require_aware(value: datetime) -> None:
+        """`_require_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("Exchange verification timestamps must be timezone-aware")

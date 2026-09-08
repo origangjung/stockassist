@@ -1,3 +1,5 @@
+"""partitions 파일은 백엔드 도메인 기능을 담당한다."""
+
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 import re
@@ -14,6 +16,8 @@ _KST = ZoneInfo("Asia/Seoul")
 
 @dataclass(frozen=True)
 class PlannedPartition:
+    """`PlannedPartition` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     name: str
     starts_at: date
     ends_at: date
@@ -21,17 +25,23 @@ class PlannedPartition:
 
 @dataclass(frozen=True)
 class ArchiveCandidate:
+    """`ArchiveCandidate` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     name: str
     starts_at: date
     ends_at: date
 
 
 def _shift_month(value: date, offset: int) -> date:
+    """`_shift_month`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     month_index = value.year * 12 + value.month - 1 + offset
     return date(month_index // 12, month_index % 12 + 1, 1)
 
 
 def plan_future_partitions(reference: date, lookahead_months: int) -> list[PlannedPartition]:
+    """`plan_future_partitions`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     current_month = reference.replace(day=1)
     return [
         PlannedPartition(
@@ -64,22 +74,30 @@ def plan_archive_candidates(
 
 
 class CandlePartitionMaintenanceService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(
         self,
         sessions: sessionmaker[Session],
         lookahead_months: int,
         archive_after_months: int = 120,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
         self._lookahead_months = lookahead_months
         self._archive_after_months = archive_after_months
 
     @property
     def supported(self) -> bool:
+        """`supported`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         engine = self._sessions.kw["bind"]
         return engine.dialect.name == "postgresql"
 
     def ensure_future(self, reference: date | None = None) -> dict[str, object]:
+        """`ensure_future`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         planned = plan_future_partitions(
             reference or datetime.now(_KST).date(),
             self._lookahead_months,
@@ -111,6 +129,8 @@ class CandlePartitionMaintenanceService:
         }
 
     def status(self) -> dict[str, object]:
+        """`status`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not self.supported:
             return {
                 "status": "unsupported",
@@ -150,6 +170,8 @@ class CandlePartitionMaintenanceService:
         reference: date,
         status: str,
     ) -> dict[str, object]:
+        """`_archive_plan`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         cutoff, candidates = plan_archive_candidates(
             partition_names,
             reference,

@@ -1,3 +1,5 @@
+"""event_engine 파일은 전략 검증과 성과 계산 기능을 담당한다."""
+
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
@@ -20,6 +22,8 @@ EVENT_ENGINE_VERSION = "event-backtest-2026.2"
 
 @dataclass(frozen=True)
 class _PendingOrder:
+    """`_PendingOrder` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     side: str
     created_at: datetime
     execute_at: datetime
@@ -37,6 +41,8 @@ class EventDrivenBacktestEngine:
         strategy: Strategy,
         config: BacktestConfig | None = None,
     ) -> BacktestResult:
+        """`run`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         config = config or BacktestConfig()
         if len(candles) < 2:
             raise ValueError("at least two candles are required")
@@ -203,6 +209,8 @@ class EventDrivenBacktestEngine:
         reason: str,
         bypass_volume_limit: bool = False,
     ) -> tuple[float, int]:
+        """`_execute`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if side == "buy":
             execution_price = market_price * (1 + config.costs.slippage_rate)
             requested_quantity = int(
@@ -347,6 +355,8 @@ class EventDrivenBacktestEngine:
         max_volume_participation: float,
         bypass_volume_limit: bool,
     ) -> int:
+        """`_bounded_quantity`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if bypass_volume_limit or market_volume is None:
             return requested_quantity
         return min(requested_quantity, int(max(0, market_volume) * max_volume_participation))

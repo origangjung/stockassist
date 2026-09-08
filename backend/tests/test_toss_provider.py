@@ -219,7 +219,36 @@ def test_warnings_keep_unknown_types_forward_compatible():
     assert warnings[0].end_date is None
 
 
-def test_expired_token_is_reissued_once():
+def test_commissions_preserve_the_official_result_array():
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/oauth2/token":
+            return _token_response()
+        assert request.headers["X-Tossinvest-Account"] == "3"
+        return httpx2.Response(
+            200,
+            json={
+                "result": [
+                    {"marketCountry": "KR", "commissionRate": "0.00015"},
+                    {"marketCountry": "US", "commissionRate": "0.001"},
+                ]
+            },
+        )
+
+    provider = TossProvider.create(
+        base_url=BASE_URL,
+        client_id="client",
+        client_secret="secret",
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        commissions = provider.get_commissions(3)
+    finally:
+        provider.close()
+
+    assert [item["marketCountry"] for item in commissions] == ["KR", "US"]
+
+
+def test_unauthorized_token_is_reissued_once_regardless_of_provider_error_code():
     issued = 0
     price_calls = 0
 
@@ -243,8 +272,8 @@ def test_expired_token_is_reissued_once():
                     json={
                         "error": {
                             "requestId": "req-expired",
-                            "code": "expired-token",
-                            "message": "expired",
+                            "code": "credential-invalid",
+                            "message": "unauthorized",
                         }
                     },
                 )

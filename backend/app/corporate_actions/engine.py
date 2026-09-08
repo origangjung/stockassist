@@ -1,3 +1,5 @@
+"""engine 파일은 백엔드 도메인 기능을 담당한다."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,6 +12,8 @@ ADJUSTMENT_VERSION = "2026.1"
 
 @dataclass(frozen=True)
 class AdjustmentResult:
+    """계산 또는 처리 결과를 묶어 전달하는 값 객체입니다."""
+
     candles: list[Candle]
     applied_actions: list[CorporateActionRecord]
     data_as_of: datetime
@@ -21,6 +25,8 @@ class AdjustmentResult:
 
 @dataclass(frozen=True)
 class BacktestAdjustmentResult:
+    """계산 또는 처리 결과를 묶어 전달하는 값 객체입니다."""
+
     candles: list[Candle]
     applied_actions: list[CorporateActionRecord]
     data_as_of: datetime
@@ -42,6 +48,8 @@ class CorporateActionAdjustmentEngine:
         *,
         as_of: datetime,
     ) -> AdjustmentResult:
+        """`adjust`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if candles and {candle.price_basis for candle in candles} != {"unadjusted"}:
             raise ValueError(
                 "Corporate action adjustment requires explicitly unadjusted source candles"
@@ -85,6 +93,8 @@ class CorporateActionAdjustmentEngine:
         actions: list[CorporateActionRecord],
         as_of: datetime,
     ) -> list[CorporateActionRecord]:
+        """`_latest_effective_revisions`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         latest: dict[tuple[str, str], CorporateActionRecord] = {}
         if len({action.symbol for action in actions}) > 1:
             raise ValueError("Corporate action input must contain only one symbol")
@@ -105,6 +115,8 @@ class CorporateActionAdjustmentEngine:
         )
 
     def _validate_action(self, action: CorporateActionRecord) -> None:
+        """`_validate_action`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         self._require_aware(action.effective_at, "effective_at")
         self._require_aware(action.known_at, "known_at")
         if action.announced_at is not None:
@@ -120,6 +132,8 @@ class CorporateActionAdjustmentEngine:
 
     @staticmethod
     def _require_aware(value: datetime, field: str) -> None:
+        """`_require_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError(f"Corporate action {field} must be timezone-aware")
 
@@ -134,6 +148,8 @@ class CorporateActionBacktestAdjustmentEngine:
         *,
         as_of: datetime,
     ) -> BacktestAdjustmentResult:
+        """`adjust`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         CorporateActionAdjustmentEngine._require_aware(as_of, "as_of")
         if candles and {candle.price_basis for candle in candles} != {"unadjusted"}:
             raise ValueError(

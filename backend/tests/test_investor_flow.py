@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 import httpx2
@@ -78,3 +79,60 @@ def test_kis_provider_rejects_us_symbols_for_domestic_investor_flow():
             provider.get_flow("AAPL")
     finally:
         provider.close()
+
+
+def test_kis_provider_maps_daily_flow_and_continuation():
+    calls = {"daily": 0}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/oauth2/tokenP":
+            return httpx2.Response(200, json={"access_token": "token", "expires_in": 3600})
+        calls["daily"] += 1
+        assert request.headers["tr_id"] == "FHPTJ04160001"
+        assert request.url.params["FID_INPUT_DATE_1"] == "20260814"
+        if calls["daily"] == 1:
+            return httpx2.Response(
+                200,
+                headers={"tr_cont": "M"},
+                json={
+                    "rt_cd": "0",
+                    "output2": [
+                        {
+                            "stck_bsop_date": "20260814",
+                            "frgn_ntby_qty": "1,000",
+                            "orgn_ntby_qty": "-200",
+                            "prsn_ntby_qty": "-800",
+                        }
+                    ],
+                },
+            )
+        assert request.headers["tr_cont"] == "N"
+        return httpx2.Response(
+            200,
+            json={
+                "rt_cd": "0",
+                "output2": [
+                    {
+                        "stck_bsop_date": "20260813",
+                        "frgn_ntby_qty": "500",
+                        "orgn_ntby_qty": "100",
+                        "prsn_ntby_qty": "-600",
+                    }
+                ],
+            },
+        )
+
+    provider = KisInvestorFlowProvider.create(
+        base_url="https://example.test",
+        app_key="key",
+        app_secret="secret",
+        transport=httpx2.MockTransport(handler),
+    )
+    try:
+        rows = provider.get_daily_flows("005930", end_date=date(2026, 8, 14))
+    finally:
+        provider.close()
+
+    assert [row.trade_date for row in rows] == [date(2026, 8, 13), date(2026, 8, 14)]
+    assert rows[-1].foreign_net_quantity == Decimal("1000")
+    assert calls["daily"] == 2

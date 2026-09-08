@@ -14,6 +14,21 @@ restores it into a separate verification database. Never restore a rehearsal bac
 
 ## 2. Create and inspect a backup
 
+For a routine local backup of both PostgreSQL and Redis, run:
+
+```powershell
+.\scripts\operations\backup_docker_data.ps1
+```
+
+The script validates the PostgreSQL archive, forces a Redis snapshot, creates SHA-256 hashes and a
+JSON manifest in the ignored `backups` directory, and removes only timestamped backup sets older
+than 14 days. Override the bounded retention period with `-RetentionDays 30`. It never prints
+credentials. Use Windows Task Scheduler to run the same command periodically while Docker Desktop
+and the Compose services are available. A scheduled task should run as the project owner, not as
+an administrator.
+
+For an individually named manual PostgreSQL backup, run the commands below.
+
 Run the dump inside the PostgreSQL container to avoid PowerShell binary redirection problems:
 
 ```powershell

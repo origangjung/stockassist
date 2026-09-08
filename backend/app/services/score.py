@@ -1,3 +1,5 @@
+"""score 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import logging
@@ -37,6 +39,8 @@ class ScoreAnalysisBundle:
 
 
 class ScoreService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(
         self,
         broker: BrokerAdapter,
@@ -50,6 +54,8 @@ class ScoreService:
         disclosure: DisclosureAnalysisService | None = None,
         investor_flow: InvestorFlowService | None = None,
     ):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._broker = broker
         self._indicators = indicators
         self._technical = technical
@@ -62,9 +68,13 @@ class ScoreService:
         self._pipeline = CandlePipeline()
 
     def score(self, symbol: str, limit: int) -> dict:
+        """`score`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return self.analysis_bundle(symbol, limit).score
 
     def analysis_bundle(self, symbol: str, limit: int) -> ScoreAnalysisBundle:
+        """`analysis_bundle`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         batch = self._broker.candles(symbol, limit)
         candles = self._pipeline.process(batch.candles).cleaned_candles
         indicator_rows = self._indicators.calculate(candles)
@@ -140,6 +150,8 @@ class ScoreService:
         source_facts: dict[str, Any],
         source_status: dict[str, str],
     ) -> AxisInput:
+        """`_load_source_axis`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         if loader is None:
             source_facts[name] = None
             source_status[name] = "unavailable"
@@ -161,6 +173,8 @@ class ScoreService:
 
     @staticmethod
     def _load_axis(name: str, loader: Callable[[], AxisInput] | None) -> AxisInput:
+        """`_load_axis`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         if loader is None:
             return unavailable_axis("해당 데이터 서비스가 구성되지 않았습니다.")
         try:

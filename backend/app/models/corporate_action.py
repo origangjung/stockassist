@@ -1,3 +1,5 @@
+"""corporate_action 파일은 데이터베이스 영속 모델 기능을 담당한다."""
+
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -19,6 +21,8 @@ from app.database.base import Base
 
 
 class CorporateActionModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "corporate_actions"
     __table_args__ = (
         UniqueConstraint(
@@ -65,6 +69,8 @@ class CorporateActionModel(Base):
 
 
 class CorporateActionApprovalModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "corporate_action_approvals"
     __table_args__ = (
         UniqueConstraint("corporate_action_id", name="uq_corporate_action_approval_action"),

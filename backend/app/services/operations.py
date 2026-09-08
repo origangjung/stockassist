@@ -1,3 +1,5 @@
+"""operations 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 import asyncio
 from datetime import UTC, datetime
 
@@ -19,6 +21,8 @@ class OperationsStatusService:
         provider_audit: ProviderAuditMaintenanceService | None = None,
         data_lifecycle: DataLifecycleMaintenanceService | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._settings = settings
         self._health = health
         self._partitions = partitions
@@ -26,6 +30,8 @@ class OperationsStatusService:
         self._data_lifecycle = data_lifecycle
 
     async def status(self) -> dict[str, object]:
+        """`status`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         ready, readiness = await self._health.readiness()
         settings = self._settings
         partition_status = (

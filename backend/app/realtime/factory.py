@@ -1,3 +1,5 @@
+"""factory 파일은 실시간 시세 연결 기능을 담당한다."""
+
 from app.adapters.broker import BrokerAdapter
 from app.config import Settings
 from app.providers.contracts import Capability
@@ -6,9 +8,30 @@ from app.realtime.contracts import RealtimeHub
 from app.realtime.hub import RealtimeQuoteHub, StreamingRealtimeQuoteHub
 from app.realtime.kis import KISStreamingQuoteSource
 from app.realtime.source import PollingQuoteSource
+from app.realtime.toss import TossStreamingQuoteSource
+from app.providers.toss.provider import TossProvider
 
 
 def build_realtime_quote_hub(settings: Settings, broker: BrokerAdapter) -> RealtimeHub:
+    """`build_realtime_quote_hub`은(는) 입력 값과 설정을 결합해 새 결과 객체를 생성합니다."""
+
+    if settings.realtime_source == "toss":
+        provider = broker.provider_for(Capability.QUOTE)
+        if not isinstance(provider, TossProvider):
+            raise ValueError("REALTIME_SOURCE=toss requires the Toss stock provider")
+        bus = RedisQuoteBus(settings.redis_url, settings.realtime_cache_ttl_seconds)
+        source = TossStreamingQuoteSource(
+            provider,
+            websocket_url=settings.toss_ws_url,
+            reconnect_max_seconds=settings.toss_ws_reconnect_max_seconds,
+        )
+        return StreamingRealtimeQuoteHub(
+            source,
+            bus,
+            enabled=settings.realtime_enabled,
+            max_symbols=min(settings.realtime_max_symbols, 40),
+            max_connections=settings.realtime_max_connections,
+        )
     if settings.realtime_source == "kis":
         app_key = settings.kis_app_key.get_secret_value() if settings.kis_app_key else ""
         app_secret = settings.kis_app_secret.get_secret_value() if settings.kis_app_secret else ""

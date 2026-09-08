@@ -1,3 +1,5 @@
+"""candles 파일은 백엔드 도메인 기능을 담당한다."""
+
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -7,18 +9,24 @@ from app.providers.contracts import Candle
 
 
 class CandleInterval(str, Enum):
+    """`CandleInterval` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     DAY = "1d"
     WEEK = "1w"
     MONTH = "1M"
 
 
 class QualitySeverity(str, Enum):
+    """`QualitySeverity` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     WARNING = "warning"
     ERROR = "error"
 
 
 @dataclass(frozen=True)
 class DataQualityLog:
+    """`DataQualityLog` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     rule: str
     severity: QualitySeverity
     message: str
@@ -27,6 +35,8 @@ class DataQualityLog:
 
 @dataclass(frozen=True)
 class DataQualityLogRecord:
+    """저장하거나 전송할 한 건의 구조화된 데이터를 나타냅니다."""
+
     log_id: int
     symbol: str
     rule: str
@@ -38,6 +48,8 @@ class DataQualityLogRecord:
 
 @dataclass(frozen=True)
 class PipelineResult:
+    """계산 또는 처리 결과를 묶어 전달하는 값 객체입니다."""
+
     raw_count: int
     cleaned_candles: list[Candle]
     quality_logs: list[DataQualityLog]
@@ -48,6 +60,8 @@ MIN_SUSPICIOUS_MISSING_BUSINESS_DAYS = 5
 
 
 def _business_days_between(start: date, end: date) -> int:
+    """`_business_days_between`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     current = start + timedelta(days=1)
     count = 0
     while current < end:
@@ -58,6 +72,8 @@ def _business_days_between(start: date, end: date) -> int:
 
 
 def _detect_suspicious_daily_gaps(candles: list[Candle]) -> list[DataQualityLog]:
+    """`_detect_suspicious_daily_gaps`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     timestamps = sorted({candle.timestamp for candle in candles})
     logs: list[DataQualityLog] = []
     for previous, current in zip(timestamps, timestamps[1:], strict=False):
@@ -153,6 +169,8 @@ def clean_candles(candles: list[Candle]) -> list[Candle]:
 
 
 def aggregate_candles(candles: list[Candle], interval: CandleInterval) -> list[Candle]:
+    """`aggregate_candles`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if interval == CandleInterval.DAY:
         return candles
     price_bases = {candle.price_basis for candle in candles}
@@ -185,9 +203,13 @@ def aggregate_candles(candles: list[Candle], interval: CandleInterval) -> list[C
 
 
 class CandlePipeline:
+    """`CandlePipeline` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     def process(
         self, raw_candles: list[Candle], interval: CandleInterval = CandleInterval.DAY
     ) -> PipelineResult:
+        """`process`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         logs = validate_candles(raw_candles)
         cleaned = (
             []

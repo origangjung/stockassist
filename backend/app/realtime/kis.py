@@ -1,3 +1,5 @@
+"""kis 파일은 실시간 시세 연결 기능을 담당한다."""
+
 import asyncio
 import json
 import logging
@@ -31,6 +33,8 @@ NEW_YORK = ZoneInfo("America/New_York")
 
 @dataclass(frozen=True)
 class KISSubscription:
+    """`KISSubscription` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     symbol: str
     name: str
     tr_id: str
@@ -39,6 +43,8 @@ class KISSubscription:
 
 
 def resolve_subscription(stock: StockInfo) -> KISSubscription:
+    """`resolve_subscription`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     symbol = stock.symbol.upper()
     if symbol.isdigit() and len(symbol) == 6:
         return KISSubscription(symbol, stock.name, DOMESTIC_TR_ID, symbol, "KRW")
@@ -67,6 +73,8 @@ def resolve_subscription(stock: StockInfo) -> KISSubscription:
 
 
 def subscription_message(approval_key: str, subscription: KISSubscription, action: str) -> dict:
+    """`subscription_message`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if action not in {"1", "2"}:
         raise ValueError("KIS subscription action must be 1 (subscribe) or 2 (unsubscribe)")
     return {
@@ -89,6 +97,8 @@ def parse_realtime_quotes(
     raw: str,
     subscriptions: dict[tuple[str, str], KISSubscription],
 ) -> list[Quote]:
+    """`parse_realtime_quotes`은(는) 원시 입력을 해석하고 필요한 값을 정규화해 추출합니다."""
+
     parts = raw.split("|", 3)
     if len(parts) != 4 or parts[0] not in {"0", "1"}:
         return []
@@ -129,6 +139,8 @@ def _find_subscription(
     received_key: str,
     subscriptions: dict[tuple[str, str], KISSubscription],
 ) -> KISSubscription | None:
+    """`_find_subscription`은(는) 필요한 데이터를 조회해 반환합니다."""
+
     direct = subscriptions.get((tr_id, received_key))
     if direct is not None:
         return direct
@@ -139,6 +151,8 @@ def _find_subscription(
 
 
 def _domestic_quote(values: list[str], subscription: KISSubscription) -> Quote:
+    """`_domestic_quote`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return Quote(
         symbol=subscription.symbol,
         name=subscription.name,
@@ -152,6 +166,8 @@ def _domestic_quote(values: list[str], subscription: KISSubscription) -> Quote:
 
 
 def _overseas_quote(values: list[str], subscription: KISSubscription) -> Quote:
+    """`_overseas_quote`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return Quote(
         symbol=subscription.symbol,
         name=subscription.name,
@@ -165,6 +181,8 @@ def _overseas_quote(values: list[str], subscription: KISSubscription) -> Quote:
 
 
 def _decimal(value: str) -> Decimal:
+    """`_decimal`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     try:
         return Decimal(value.strip())
     except InvalidOperation as exc:
@@ -175,15 +193,21 @@ def _decimal(value: str) -> Decimal:
 
 
 def _signed_decimal(value: str, sign_code: str) -> Decimal:
+    """`_signed_decimal`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     number = _decimal(value)
     return -abs(number) if sign_code in {"4", "5"} else number
 
 
 def _integer(value: str) -> int:
+    """`_integer`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return int(_decimal(value))
 
 
 def _timestamp(date_value: str, time_value: str, timezone: ZoneInfo) -> datetime:
+    """`_timestamp`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     try:
         parsed = datetime.strptime(f"{date_value}{time_value[:6]}", "%Y%m%d%H%M%S")
         return parsed.replace(tzinfo=timezone).astimezone(UTC)
@@ -192,6 +216,8 @@ def _timestamp(date_value: str, time_value: str, timezone: ZoneInfo) -> datetime
 
 
 class KISStreamingQuoteSource(StreamingQuoteSource):
+    """`KISStreamingQuoteSource` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     name = "kis"
 
     def __init__(
@@ -207,6 +233,8 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
         transport: httpx2.AsyncBaseTransport | None = None,
         connector: Callable[..., Awaitable[ClientConnection]] | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._app_key = app_key
         self._app_secret = app_secret
         self._websocket_url = websocket_url
@@ -228,13 +256,33 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
         self._connection: ClientConnection | None = None
         self._approval_key: str | None = None
         self._approval_expires_at = 0.0
+        self._connection_attempts = 0
+        self._successful_connections = 0
+        self._reconnects = 0
+        self._last_error_type: str | None = None
+
+    def diagnostics(self) -> dict[str, int | str | bool | None]:
+        """키와 원문 응답을 제외한 운영 상태만 반환한다."""
+
+        return {
+            "connection_attempts": self._connection_attempts,
+            "successful_connections": self._successful_connections,
+            "reconnects": self._reconnects,
+            "connected": self._connection is not None,
+            "subscriptions": len(self._subscriptions),
+            "last_error_type": self._last_error_type,
+        }
 
     async def start(self, publish: QuotePublisher) -> None:
+        """`start`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._publish = publish
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._run(), name="kis-realtime-stream")
 
     async def subscribe(self, symbol: str) -> None:
+        """`subscribe`은(는) 비동기로 연결 또는 메시지 전달 생명주기를 관리합니다."""
+
         stock = await asyncio.to_thread(self._resolver.get_stock_info, symbol)
         subscription = resolve_subscription(stock)
         async with self._lock:
@@ -253,6 +301,8 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
             await self._actions.put(("1", subscription))
 
     async def unsubscribe(self, symbol: str) -> None:
+        """`unsubscribe`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         async with self._lock:
             subscription = self._subscriptions.pop(symbol, None)
             connected = self._connection is not None
@@ -265,6 +315,8 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
             await self._connection.close()
 
     async def stop(self) -> None:
+        """`stop`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self._task is not None:
             self._task.cancel()
             with suppress(asyncio.CancelledError):
@@ -277,6 +329,8 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
         await self._client.aclose()
 
     async def get_approval_key(self) -> str:
+        """`get_approval_key`은(는) 비동기로 필요한 데이터를 조회해 반환합니다."""
+
         now = asyncio.get_running_loop().time()
         if self._approval_key is not None and now < self._approval_expires_at:
             return self._approval_key
@@ -312,12 +366,17 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
         return approval_key
 
     async def _run(self) -> None:
+        """`_run`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         backoff = 1.0
         while True:
             await self._has_subscriptions.wait()
             try:
+                self._connection_attempts += 1
                 approval_key = await self.get_approval_key()
                 async with self._connector(self._websocket_url) as websocket:
+                    self._successful_connections += 1
+                    self._last_error_type = None
                     async with self._lock:
                         self._connection = websocket
                         subscriptions = tuple(self._subscriptions.values())
@@ -340,7 +399,10 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
                     raise ConnectionError("KIS WebSocket connection closed")
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
+                self._last_error_type = type(exc).__name__
+                if self._successful_connections:
+                    self._reconnects += 1
                 logger.exception("KIS realtime connection failed; reconnecting")
                 await asyncio.sleep(backoff)
                 backoff = min(self._reconnect_max_seconds, backoff * 2)
@@ -349,6 +411,8 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
                     self._connection = None
 
     async def _send_actions(self, websocket: ClientConnection, approval_key: str) -> None:
+        """`_send_actions`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         while True:
             action, subscription = await self._actions.get()
             await self._send(websocket, approval_key, action, subscription)
@@ -360,10 +424,14 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
         action: str,
         subscription: KISSubscription,
     ) -> None:
+        """`_send`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         await websocket.send(json.dumps(subscription_message(approval_key, subscription, action)))
         await asyncio.sleep(0.05)
 
     async def _receive(self, websocket: ClientConnection) -> None:
+        """`_receive`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         async for raw_message in websocket:
             raw = raw_message.decode() if isinstance(raw_message, bytes) else raw_message
             if raw and raw[0] in {"0", "1"}:
@@ -379,6 +447,8 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
 
     @staticmethod
     async def _handle_system_message(websocket: ClientConnection, raw: str) -> None:
+        """`_handle_system_message`은(는) 비동기로 발생한 이벤트 또는 요청 상태 변화를 처리합니다."""
+
         try:
             message = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -400,6 +470,8 @@ class KISStreamingQuoteSource(StreamingQuoteSource):
             )
 
     def _drain_actions(self) -> None:
+        """`_drain_actions`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         while not self._actions.empty():
             with suppress(asyncio.QueueEmpty):
                 self._actions.get_nowait()

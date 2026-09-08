@@ -9,6 +9,8 @@ from app.providers.audit import ProviderAuditSink
 def build_providers(
     settings: Settings, audit_sink: ProviderAuditSink | None = None
 ) -> list[StockProvider]:
+    """`build_providers`은(는) 입력 값과 설정을 결합해 새 결과 객체를 생성합니다."""
+
     if settings.stock_provider == "mock":
         return [MockProvider()]
     secret = (

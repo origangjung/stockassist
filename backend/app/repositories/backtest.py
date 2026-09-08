@@ -1,3 +1,5 @@
+"""backtest 파일은 데이터 저장과 조회 기능을 담당한다."""
+
 from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
@@ -16,6 +18,8 @@ from app.repositories.contracts import BacktestRepository
 
 
 def _json_safe(value: Any) -> Any:
+    """`_json_safe`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, dict):
@@ -26,7 +30,11 @@ def _json_safe(value: Any) -> Any:
 
 
 class SqlAlchemyBacktestRepository(BacktestRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save(
@@ -37,6 +45,8 @@ class SqlAlchemyBacktestRepository(BacktestRepository):
         *,
         metadata: dict[str, object] | None = None,
     ) -> str:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         now = datetime.now(timezone.utc)
         engine = "event_driven" if result.events else "vectorized"
         config_payload = {
@@ -74,6 +84,8 @@ class SqlAlchemyBacktestRepository(BacktestRepository):
         offset: int,
         symbol: str | None = None,
     ) -> tuple[list[BacktestRunSummary], int]:
+        """`list_runs`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         conditions = []
         if symbol:
             conditions.append(BacktestRunModel.symbol == symbol)
@@ -92,6 +104,8 @@ class SqlAlchemyBacktestRepository(BacktestRepository):
         return [self._summary(run, result) for run, result in rows], total
 
     def get_run(self, run_id: str) -> BacktestRunDetail | None:
+        """`get_run`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         query = (
             select(BacktestRunModel, BacktestResultModel)
             .join(BacktestResultModel, BacktestResultModel.run_id == BacktestRunModel.id)
@@ -115,6 +129,8 @@ class SqlAlchemyBacktestRepository(BacktestRepository):
         run: BacktestRunModel,
         result: BacktestResultModel,
     ) -> BacktestRunSummary:
+        """`_summary`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         config = dict(run.config or {})
         has_events = bool(result.events)
         engine = str(config.get("engine") or ("event_driven" if has_events else "vectorized"))

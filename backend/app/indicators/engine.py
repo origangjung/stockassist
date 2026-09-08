@@ -1,3 +1,5 @@
+"""engine 파일은 백엔드 도메인 기능을 담당한다."""
+
 from dataclasses import asdict
 from math import isfinite
 from typing import Any
@@ -31,6 +33,8 @@ def _wilder_smoothing(values: pd.Series, period: int) -> pd.Series:
 
 
 def _safe_value(value: Any) -> float | int | str | bool | None:
+    """`_safe_value`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if value is None or pd.isna(value):
         return None
     if isinstance(value, (np.integer, int)):
@@ -48,6 +52,8 @@ class IndicatorEngine:
     status = "experimental"
 
     def calculate(self, candles: list[Candle]) -> list[dict[str, Any]]:
+        """`calculate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not candles:
             return []
         frame = (
@@ -154,6 +160,8 @@ class IndicatorEngine:
     def _supertrend(
         high: pd.Series, low: pd.Series, close: pd.Series, period: int, multiplier: float
     ) -> tuple[pd.Series, pd.Series]:
+        """`_supertrend`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         true_range = pd.concat(
             [high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1
         ).max(axis=1)

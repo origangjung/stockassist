@@ -82,6 +82,61 @@ def test_detects_confirmed_double_bottom():
     assert "double_bottom_confirmed" in names(result)
 
 
+def test_detects_confirmed_head_and_shoulders():
+    highs = [100, 103, 110, 104, 100, 104, 120, 105, 100, 104, 110, 102, 95]
+    candles = [
+        candle(index, high - 4, high, high - 8, high - 3)
+        for index, high in enumerate(highs)
+    ]
+    candles[-1] = candle(12, 92, 95, 85, 89)
+
+    result = PatternEngine().analyze(candles)
+
+    assert "head_and_shoulders_confirmed" in names(result)
+    assert result["reference_signals"][0]["outlook"] == "relative_underperformance_watch"
+    assert result["reference_signals"][0]["horizon_days"] == 10
+
+
+def test_detects_confirmed_inverse_head_and_shoulders():
+    lows = [100, 97, 90, 96, 100, 96, 75, 95, 100, 96, 90, 98, 105]
+    candles = [
+        candle(index, low + 4, low + 8, low, low + 3)
+        for index, low in enumerate(lows)
+    ]
+    candles[-1] = candle(12, 108, 112, 105, 110)
+
+    result = PatternEngine().analyze(candles)
+
+    assert "inverse_head_and_shoulders_confirmed" in names(result)
+
+
+def test_detects_symmetrical_triangle_from_converging_range():
+    candles = [
+        candle(
+            index,
+            100,
+            120 - index * 0.5,
+            80 + index * 0.5,
+            100,
+        )
+        for index in range(20)
+    ]
+
+    result = PatternEngine().analyze(candles)
+
+    triangle = next(
+        item for item in result["patterns"] if item["name"] == "symmetrical_triangle"
+    )
+    assert triangle["direction"] == "neutral"
+
+
 def test_rejects_invalid_ohlc_input():
     with pytest.raises(ValueError, match="invalid OHLC"):
         PatternEngine().analyze([candle(0, 100, 99, 95, 98)])
+
+
+def test_nonvalidated_pattern_has_no_predictive_reference_signal():
+    result = PatternEngine().analyze([candle(0, 104, 105, 90, 102)])
+
+    assert "hammer" in names(result)
+    assert result["reference_signals"] == []

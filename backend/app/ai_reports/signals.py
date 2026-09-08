@@ -1,9 +1,13 @@
+"""signals 파일은 백엔드 도메인 기능을 담당한다."""
+
 from dataclasses import dataclass
 from decimal import Decimal
 
 
 @dataclass(frozen=True)
 class ReferenceSignalResult:
+    """계산 또는 처리 결과를 묶어 전달하는 값 객체입니다."""
+
     signal: str
     strength: float
     basis: list[str]
@@ -56,6 +60,8 @@ def derive_reference_signal(
 
 
 def _number(source: dict | None, key: str) -> float | None:
+    """`_number`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if not isinstance(source, dict):
         return None
     value = source.get(key)

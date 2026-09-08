@@ -1,3 +1,5 @@
+"""audit 파일은 외부 데이터 공급자 연동 기능을 담당한다."""
+
 from datetime import datetime
 from time import perf_counter
 from typing import Any, Mapping
@@ -63,6 +65,8 @@ def record_toss_audit(
 def extract_provider_request_id(
     payload: Mapping[str, Any], headers: Mapping[str, str]
 ) -> str | None:
+    """`extract_provider_request_id`은(는) 원시 입력을 해석하고 필요한 값을 정규화해 추출합니다."""
+
     raw_error = payload.get("error")
     error = raw_error if isinstance(raw_error, Mapping) else {}
     value = (
@@ -75,6 +79,8 @@ def extract_provider_request_id(
 
 
 def bounded_text(value: str | None) -> str | None:
+    """`bounded_text`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if value is None:
         return None
     cleaned = "".join(character for character in str(value) if character.isprintable()).strip()

@@ -1,3 +1,5 @@
+"""mock 파일은 외부 데이터 공급자 연동 기능을 담당한다."""
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import random
@@ -93,6 +95,8 @@ class MockProvider(StockProvider):
     )
 
     def _stock(self, symbol: str) -> tuple[str, Decimal, Decimal, int, str, str]:
+        """`_stock`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         try:
             if symbol in _US_STOCKS:
                 return _US_STOCKS[symbol]
@@ -102,11 +106,15 @@ class MockProvider(StockProvider):
 
     @staticmethod
     def _market_currency(symbol: str) -> tuple[str, str]:
+        """`_market_currency`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if symbol in _US_STOCKS:
             return _US_MARKETS.get(symbol, "NASDAQ"), "USD"
         return ("KOSPI" if symbol != "035420" else "KOSDAQ"), "KRW"
 
     def get_quote(self, symbol: str) -> Quote:
+        """`get_quote`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         name, price, change, volume, _, _ = self._stock(symbol)
         previous_close = price - change
         _, currency = self._market_currency(symbol)
@@ -122,6 +130,8 @@ class MockProvider(StockProvider):
         )
 
     def get_candles(self, symbol: str, limit: int = 30) -> list[Candle]:
+        """`get_candles`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         _, current, _, _, _, _ = self._stock(symbol)
         _, currency = self._market_currency(symbol)
         rng = random.Random(f"stockpilot:{symbol}")
@@ -152,6 +162,8 @@ class MockProvider(StockProvider):
         return candles
 
     def get_orderbook(self, symbol: str) -> tuple[list[OrderbookLevel], list[OrderbookLevel]]:
+        """`get_orderbook`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         quote = self.get_quote(symbol)
         tick = (
             Decimal("0.01")
@@ -163,6 +175,8 @@ class MockProvider(StockProvider):
         return asks, bids
 
     def get_trades(self, symbol: str, limit: int = 20) -> list[Trade]:
+        """`get_trades`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         quote = self.get_quote(symbol)
         rng = random.Random(f"stockpilot:trades:{symbol}")
         now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -183,6 +197,8 @@ class MockProvider(StockProvider):
         ]
 
     def get_stock_info(self, symbol: str) -> StockInfo:
+        """`get_stock_info`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         name, _, _, _, sector, listed_at = self._stock(symbol)
         market, currency = self._market_currency(symbol)
         return StockInfo(
@@ -195,13 +211,19 @@ class MockProvider(StockProvider):
         )
 
     def get_warnings(self, symbol: str) -> list[StockWarning]:
+        """`get_warnings`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         self._stock(symbol)
         return []
 
     def get_accounts(self) -> list[BrokerAccount]:
+        """`get_accounts`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         return [BrokerAccount(account_seq=1, account_no="12345678901", account_type="BROKERAGE")]
 
     def get_holdings(self, account_seq: int) -> HoldingsSnapshot:
+        """`get_holdings`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         if account_seq != 1:
             raise ProviderNotFoundError("Mock account was not found", code="account-not-found")
         samsung = self.get_quote("005930")
@@ -216,6 +238,8 @@ class MockProvider(StockProvider):
 def _mock_holding(
     quote: Quote, quantity: Decimal, average_price: Decimal, market_country: str
 ) -> Holding:
+    """`_mock_holding`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     purchase_amount = quantity * average_price
     market_value = quantity * quote.price
     profit_loss = market_value - purchase_amount
@@ -246,9 +270,13 @@ def _mock_holding(
 
 
 def _snapshot(account_seq: int, holdings: list[Holding]) -> HoldingsSnapshot:
+    """`_snapshot`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     currencies = {"KRW", "USD"}
 
     def totals(attribute: str) -> dict[str, Decimal | None]:
+        """`totals`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         values = {
             currency: sum(
                 (getattr(item, attribute) for item in holdings if item.currency == currency),

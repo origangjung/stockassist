@@ -1,3 +1,5 @@
+"""admin 파일은 HTTP 요청·응답과 접근 제어 기능을 담당한다."""
+
 from secrets import compare_digest
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -18,6 +20,8 @@ async def require_admin_access(
     x_admin_key: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
 ) -> None:
+    """`require_admin_access`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     configured = settings.admin_api_key
     expected = configured.get_secret_value() if configured else ""
     if not expected:

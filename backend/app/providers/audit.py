@@ -1,3 +1,5 @@
+"""audit 파일은 외부 데이터 공급자 연동 기능을 담당한다."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -5,6 +7,8 @@ from typing import Protocol
 
 @dataclass(frozen=True, slots=True)
 class ProviderAuditEvent:
+    """`ProviderAuditEvent` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     provider: str
     method: str
     endpoint: str
@@ -21,6 +25,8 @@ class ProviderAuditEvent:
 
 @dataclass(frozen=True, slots=True)
 class ProviderAuditRecord:
+    """저장하거나 전송할 한 건의 구조화된 데이터를 나타냅니다."""
+
     audit_id: int
     provider: str
     method: str
@@ -37,10 +43,14 @@ class ProviderAuditRecord:
 
 
 class ProviderAuditSink(Protocol):
+    """`ProviderAuditSink` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     def save(self, event: ProviderAuditEvent) -> None: ...
 
 
 class ProviderAuditReadRepository(Protocol):
+    """`ProviderAuditReadRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     def list_recent(
         self,
         *,
@@ -52,4 +62,6 @@ class ProviderAuditReadRepository(Protocol):
 
 
 class ProviderAuditMaintenanceRepository(Protocol):
+    """`ProviderAuditMaintenanceRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     def delete_before(self, cutoff: datetime) -> int: ...

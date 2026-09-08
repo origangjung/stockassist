@@ -1,3 +1,5 @@
+"""corporate_actions 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from urllib.parse import parse_qs, urlsplit
@@ -34,12 +36,16 @@ from app.providers.contracts import Candle
 
 
 class CorporateActionService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(
         self,
         repository: CorporateActionRepository | None,
         engine: CorporateActionAdjustmentEngine | None = None,
         backtest_engine: CorporateActionBacktestAdjustmentEngine | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._repository = repository
         self._engine = engine or CorporateActionAdjustmentEngine()
         self._backtest_engine = backtest_engine or CorporateActionBacktestAdjustmentEngine()
@@ -52,6 +58,8 @@ class CorporateActionService:
         symbol: str | None = None,
         as_of: datetime | None = None,
     ) -> dict[str, object]:
+        """`recent`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         point_in_time = as_of or datetime.now(UTC)
         self._require_aware(point_in_time)
         if self._repository is None:
@@ -91,6 +99,8 @@ class CorporateActionService:
         *,
         as_of: datetime,
     ) -> AdjustmentResult:
+        """`adjusted_view`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._require_aware(as_of)
         actions = (
             self._repository.list_known(symbol, as_of=as_of) if self._repository is not None else []
@@ -108,6 +118,8 @@ class CorporateActionService:
         *,
         as_of: datetime,
     ) -> BacktestAdjustmentResult:
+        """`backtest_view`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._require_aware(as_of)
         if self._repository is None:
             raise CorporateActionAdjustmentUnavailableError(
@@ -118,6 +130,8 @@ class CorporateActionService:
 
     @staticmethod
     def _require_aware(value: datetime) -> None:
+        """`_require_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("Corporate action as_of must be timezone-aware")
 
@@ -131,6 +145,8 @@ class CorporateActionIngestionService:
         providers: list[CorporateActionProvider] | None = None,
         source_candidates: tuple[CorporateActionSourceMetadata, ...] = SOURCE_CANDIDATES,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._repository = repository
         self._source_candidates = source_candidates
         self._providers: dict[str, CorporateActionProvider] = {}
@@ -141,6 +157,8 @@ class CorporateActionIngestionService:
             self._providers[name] = provider
 
     def status(self) -> dict[str, object]:
+        """`status`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         sources = [
             asdict(provider.metadata)
             for provider in sorted(self._providers.values(), key=lambda item: item.metadata.name)
@@ -169,6 +187,8 @@ class CorporateActionIngestionService:
         end: datetime,
         limit: int,
     ) -> dict[str, object]:
+        """`ingest`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._require_aware(start)
         self._require_aware(end)
         if start > end:
@@ -225,6 +245,8 @@ class CorporateActionIngestionService:
 
     @staticmethod
     def _require_aware(value: datetime) -> None:
+        """`_require_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("Corporate action ingestion timestamps must be timezone-aware")
 
@@ -237,6 +259,8 @@ class CorporateActionCandidateService:
         providers: list[CorporateActionCandidateProvider],
         reconciler: CorporateActionRevisionReconciler | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._providers: dict[str, CorporateActionCandidateProvider] = {}
         self._reconciler = reconciler or CorporateActionRevisionReconciler()
         for provider in providers:
@@ -246,6 +270,8 @@ class CorporateActionCandidateService:
             self._providers[name] = provider
 
     def status(self) -> dict[str, object]:
+        """`status`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return {
             "available": bool(self._providers),
             "sources": [
@@ -270,6 +296,8 @@ class CorporateActionCandidateService:
         end: date,
         limit: int,
     ) -> dict[str, object]:
+        """`preview`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if start > end:
             raise ValueError("Corporate action candidate start must not be after end")
         if (end - start).days > 366:
@@ -315,11 +343,15 @@ class CorporateActionCandidateService:
         }
 
     def close(self) -> None:
+        """`close`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         for provider in self._providers.values():
             provider.close()
 
     @staticmethod
     def _require_aware(value: datetime) -> None:
+        """`_require_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("Corporate action candidate fetched_at must be timezone-aware")
 
@@ -339,6 +371,8 @@ class CorporateActionApprovalService:
         exchange_verification: CorporateActionExchangeVerificationService | None = None,
         clock=None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._repository = repository
         self._candidate_service = candidate_service
         self._enabled = enabled
@@ -348,6 +382,8 @@ class CorporateActionApprovalService:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def status(self) -> dict[str, object]:
+        """`status`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         available = self._enabled and self._repository is not None
         return {
             "enabled": self._enabled,
@@ -378,6 +414,8 @@ class CorporateActionApprovalService:
         exchange_evidence_url: str,
         confirmation: str,
     ) -> dict[str, object]:
+        """`approve`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not self._enabled or self._repository is None:
             raise CorporateActionApprovalUnavailableError(
                 "Corporate action manual approval is disabled"
@@ -463,11 +501,15 @@ class CorporateActionApprovalService:
 
     @staticmethod
     def _require_aware(value: datetime) -> None:
+        """`_require_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("Corporate action approval timestamps must be timezone-aware")
 
     @staticmethod
     def _validate_url(value: str, hosts: frozenset[str]) -> None:
+        """`_validate_url`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         parsed = urlsplit(value)
         try:
             port = parsed.port
@@ -487,6 +529,8 @@ class CorporateActionApprovalService:
 
     @classmethod
     def _validate_filing_url(cls, value: str, receipt_no: str) -> None:
+        """`_validate_filing_url`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         cls._validate_url(value, frozenset({"dart.fss.or.kr"}))
         parsed = urlsplit(value)
         if parse_qs(parsed.query).get("rcpNo") != [receipt_no]:

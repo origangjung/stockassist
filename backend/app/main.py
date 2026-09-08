@@ -1,3 +1,9 @@
+"""StockPilot FastAPI 프로세스의 의존성을 조립하는 진입 모듈이다.
+
+프로세스 시작 시 공급자, 저장소, 서비스, 미들웨어와 백그라운드 자원을 한 번 생성한다.
+비즈니스 계산은 각 도메인 모듈에 두며, 이 파일에는 객체 연결과 생명주기만 둔다.
+"""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -32,6 +38,7 @@ from app.indicators import IndicatorEngine
 from app.patterns import PatternEngine
 from app.api.routes import router
 from app.providers import build_providers
+from app.providers.toss import TossProvider
 from app.providers.errors import ProviderError
 from app.financials import build_financial_provider
 from app.disclosures import build_disclosure_provider
@@ -41,18 +48,27 @@ from app.prediction import build_prediction_engine
 from app.prediction.artifacts import ModelArtifactStore
 from app.ai_reports import build_ai_report_generator
 from app.ai_reports.compliance import ComplianceValidator
+from app.local_ai import LocalAnalysisRuntime
+from app.local_ai.finra import FinraShortVolumeClient
+from app.local_ai.fred import FredClient
+from app.local_ai.sec import SecCompanyFactsClient
+from app.local_ai.news_api import NewsApiClient
 from app.services.financial import FinancialAnalysisService
+from app.financials.valuation import ValuationAnalysisService
 from app.services.content import DisclosureAnalysisService, NewsAnalysisService
 from app.services.investor_flow import InvestorFlowService
 from app.services.prediction import PredictionService
 from app.services.model_registry import ModelRegistryService
+from app.services.local_ai_readiness import LocalAiReadinessService
 from app.services.market import MarketDataService
+from app.services.toss_open_api import TossOpenApiService
 from app.services.backtest import BacktestService
 from app.services.technical import TechnicalAnalysisService
 from app.services.patterns import PatternAnalysisService
 from app.services.score import ScoreService
 from app.services.ai_report import AIReportService
 from app.services.portfolio import PortfolioService
+from app.services.paper_trading import PaperTradingService
 from app.services.alerts import ReferenceAlertService
 from app.services.operations import OperationsStatusService
 from app.services.data_quality import DataQualityHistoryService
@@ -96,6 +112,10 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyStockRepository,
     SqlAlchemyCandleRepository,
     SqlAlchemyCandleIngestionRepository,
+)
+from app.repositories.paper_trading import (
+    InMemoryPaperTradingRepository,
+    SqlAlchemyPaperTradingRepository,
 )
 from app.websocket import router as websocket_router
 
@@ -144,6 +164,11 @@ corporate_action_approval_service = CorporateActionApprovalService(
 providers = build_providers(settings, audit_sink=provider_audit_repository)
 broker_adapter = BrokerAdapter(providers)
 market_service = MarketDataService(broker_adapter)
+toss_open_api_service = TossOpenApiService(
+    next((provider for provider in providers if isinstance(provider, TossProvider)), None),
+    account_access_enabled=settings.account_sync_enabled,
+    trading_enabled=settings.toss_trading_enabled,
+)
 technical_service = TechnicalAnalysisService(broker_adapter, IndicatorEngine())
 pattern_service = PatternAnalysisService(broker_adapter, PatternEngine())
 backtest_repository = SqlAlchemyBacktestRepository(sessions) if sessions is not None else None
@@ -159,6 +184,11 @@ investor_flow_repository = (
 prediction_repository = SqlAlchemyPredictionRepository(sessions) if sessions is not None else None
 ai_report_repository = SqlAlchemyAIReportRepository(sessions) if sessions is not None else None
 portfolio_repository = SqlAlchemyPortfolioRepository(sessions) if sessions is not None else None
+paper_trading_repository = (
+    SqlAlchemyPaperTradingRepository(sessions)
+    if sessions is not None
+    else InMemoryPaperTradingRepository()
+)
 alert_repository = SqlAlchemyAlertRepository(sessions) if sessions is not None else None
 quality_log_repository = SqlAlchemyQualityLogRepository(sessions) if sessions is not None else None
 partition_maintenance_service = (
@@ -194,6 +224,10 @@ prediction_service = PredictionService(
     prediction_repository,
 )
 model_registry_service = ModelRegistryService(prediction_repository, model_artifact_store)
+local_ai_readiness_service = LocalAiReadinessService(
+    settings.local_ai_artifact_dir,
+    enabled=settings.local_ai_enabled,
+)
 backtest_service = BacktestService(
     broker_adapter,
     BacktestEngine(),
@@ -212,6 +246,56 @@ score_service = ScoreService(
     investor_flow=investor_flow_service,
 )
 ai_report_generator = build_ai_report_generator(settings)
+finra_local_client = None
+if settings.local_ai_enabled and settings.finra_client_id and settings.finra_client_secret:
+    finra_local_client = FinraShortVolumeClient(
+        base_url=settings.finra_api_base_url,
+        token_url=settings.finra_token_url,
+        client_id=settings.finra_client_id,
+        client_secret=settings.finra_client_secret.get_secret_value(),
+    )
+sec_local_client = None
+if settings.local_ai_enabled and settings.sec_user_agent:
+    sec_local_client = SecCompanyFactsClient(
+        user_agent=settings.sec_user_agent,
+        base_url=settings.sec_base_url,
+    )
+valuation_service = ValuationAnalysisService(
+    financial_provider,
+    market_service.quote,
+    sec_client=sec_local_client,
+)
+news_local_client = None
+if (
+    settings.local_ai_enabled
+    and settings.app_environment == "development"
+    and settings.news_api_key
+):
+    news_local_client = NewsApiClient(
+        api_key=settings.news_api_key.get_secret_value(),
+        base_url=settings.news_api_base_url,
+        timeout_seconds=settings.news_timeout_seconds,
+        daily_request_limit=settings.news_api_daily_request_limit,
+    )
+fred_local_client = None
+if settings.local_ai_enabled and settings.fred_api_key:
+    fred_local_client = FredClient(
+        api_key=settings.fred_api_key.get_secret_value(),
+        base_url=settings.fred_base_url,
+    )
+local_ai_runtime = (
+    LocalAnalysisRuntime(
+        settings.local_ai_artifact_dir,
+        flow_feature_loader=finra_local_client.latest_features if finra_local_client else None,
+        financial_feature_loader=sec_local_client.latest_features if sec_local_client else None,
+        news_feature_loader=news_local_client.latest_features if news_local_client else None,
+        macro_feature_loader=(
+            fred_local_client.latest_macro_features if fred_local_client else None
+        ),
+    )
+    if settings.local_ai_enabled
+    else None
+)
 ai_report_service = AIReportService(
     market_service,
     score_service,
@@ -220,12 +304,14 @@ ai_report_service = AIReportService(
     ai_report_generator,
     ComplianceValidator(),
     ai_report_repository,
+    local_ai=local_ai_runtime,
 )
 portfolio_service = PortfolioService(
     broker_adapter,
     sync_enabled=settings.account_sync_enabled,
     repository=portfolio_repository,
 )
+paper_trading_service = PaperTradingService(market_service, paper_trading_repository)
 reference_alert_service = ReferenceAlertService(broker_adapter, alert_repository)
 realtime_quote_hub = build_realtime_quote_hub(settings, broker_adapter)
 health_service = build_health_service(settings, sessions)
@@ -262,6 +348,8 @@ distributed_rate_limiter = (
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """`lifespan`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     scheduler = None
     await realtime_quote_hub.start()
     try:
@@ -295,6 +383,14 @@ async def lifespan(_: FastAPI):
         news_provider.close()
         investor_flow_provider.close()
         ai_report_generator.close()
+        if finra_local_client is not None:
+            finra_local_client.close()
+        if sec_local_client is not None:
+            sec_local_client.close()
+        if news_local_client is not None:
+            news_local_client.close()
+        if fred_local_client is not None:
+            fred_local_client.close()
         corporate_action_candidate_service.close()
         if distributed_rate_limiter is not None:
             await distributed_rate_limiter.aclose()
@@ -344,15 +440,21 @@ if settings.metrics_enabled:
 
 @app.get("/health", tags=["health"])
 def health() -> dict[str, str]:
+    """`health`은(는) 서비스와 핵심 의존성의 현재 동작 가능 상태를 반환합니다."""
+
     return {"status": "ok", "service": "stockpilot-api"}
 
 
 @app.get("/health/live", tags=["health"])
 def liveness() -> dict[str, str]:
+    """`liveness`은(는) 서비스와 핵심 의존성의 현재 동작 가능 상태를 반환합니다."""
+
     return {"status": "alive", "service": "stockpilot-api"}
 
 
 @app.get("/health/ready", tags=["health"])
 async def readiness() -> JSONResponse:
+    """`readiness`은(는) 서비스와 핵심 의존성의 현재 동작 가능 상태를 반환합니다."""
+
     ready, payload = await health_service.readiness()
     return JSONResponse(payload, status_code=200 if ready else 503)

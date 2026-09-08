@@ -1,3 +1,5 @@
+"""providers 파일은 백엔드 도메인 기능을 담당한다."""
+
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -7,6 +9,8 @@ from app.providers.errors import ProviderNotFoundError
 
 
 class MockInvestorFlowProvider(InvestorFlowProvider):
+    """외부 또는 모의 데이터 원천을 동일한 계약으로 제공하는 구현체입니다."""
+
     name = "mock"
     _flows = {
         "005930": ("1580000", "-420000", "-1160000", "3020000000", "51.12"),
@@ -15,6 +19,8 @@ class MockInvestorFlowProvider(InvestorFlowProvider):
     }
 
     def get_flow(self, symbol: str) -> InvestorFlow:
+        """`get_flow`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         try:
             values = self._flows[symbol]
         except KeyError as exc:
@@ -36,6 +42,8 @@ class MockInvestorFlowProvider(InvestorFlowProvider):
 
 
 def build_investor_flow_provider(settings: Settings) -> InvestorFlowProvider:
+    """`build_investor_flow_provider`은(는) 입력 값과 설정을 결합해 새 결과 객체를 생성합니다."""
+
     if settings.investor_flow_provider == "mock":
         return MockInvestorFlowProvider()
     app_key = settings.kis_app_key.get_secret_value() if settings.kis_app_key else ""

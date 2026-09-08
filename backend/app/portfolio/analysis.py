@@ -1,3 +1,5 @@
+"""analysis 파일은 백엔드 도메인 기능을 담당한다."""
+
 from decimal import Decimal
 
 from app.providers.contracts import Holding, HoldingsSnapshot
@@ -6,6 +8,8 @@ ANALYSIS_VERSION = "portfolio-2026.2"
 
 
 def analyze_portfolio(snapshot: HoldingsSnapshot) -> dict:
+    """`analyze_portfolio`은(는) 해당 작업의 전체 처리 흐름을 실행하고 결과를 반환합니다."""
+
     by_currency: dict[str, list[Holding]] = {}
     for holding in snapshot.holdings:
         by_currency.setdefault(holding.currency, []).append(holding)
@@ -32,6 +36,8 @@ def analyze_portfolio(snapshot: HoldingsSnapshot) -> dict:
 
 
 def _currency_analysis(holdings: list[Holding]) -> dict:
+    """`_currency_analysis`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     market_value = sum((item.market_value for item in holdings), Decimal("0"))
     purchase_amount = sum((item.purchase_amount for item in holdings), Decimal("0"))
     profit_after_cost = sum((item.profit_loss_after_cost for item in holdings), Decimal("0"))

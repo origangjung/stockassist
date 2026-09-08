@@ -4,6 +4,23 @@ Phase 12 provides an optional XGBoost model that estimates the probability that 
 will be higher after a requested number of trading days. To keep local previews and the default
 Docker image small, runtime prediction defaults to `lightweight`.
 
+GPU training is isolated from the runtime stack. The `training` Compose profile installs the ML
+extra, receives the NVIDIA GPU, has no network access, reads `datasets/` read-only, and writes only
+to `artifacts/`. Verify CUDA-backed XGBoost training with:
+
+```powershell
+docker compose --profile training run --rm trainer
+```
+
+For a non-promoting, purged walk-forward benchmark on owned local-AI datasets, run the trainer
+with `scripts/ai/training/benchmark_gpu_xgboost_local_ai.py`. The script supports stock and ETF technical/risk
+datasets, requires XGBoost to select CUDA, and can write a checksum-manifested candidate only under
+the ignored `artifacts` directory. Candidate output never changes the runtime pointer or model
+registry promotion state.
+
+Do not add GPU access or ML build dependencies to the API service unless runtime inference has a
+measured need for them.
+
 ## Runtime modes
 
 - `PREDICTION_ENGINE=lightweight` uses a deterministic 20-candle momentum/volatility baseline.

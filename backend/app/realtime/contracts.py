@@ -1,3 +1,5 @@
+"""contracts 파일은 실시간 시세 연결 기능을 담당한다."""
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
@@ -43,6 +45,8 @@ class StreamingQuoteSource(ABC):
 
 
 class QuoteBus(ABC):
+    """`QuoteBus` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     async def publish(self, symbol: str, message: QuoteMessage) -> None: ...
 
@@ -57,6 +61,8 @@ class QuoteBus(ABC):
 
 
 class RealtimeHub(Protocol):
+    """`RealtimeHub` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @property
     def enabled(self) -> bool: ...
 

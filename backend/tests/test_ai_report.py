@@ -15,6 +15,7 @@ from app.models.ai_report import AIReportModel
 from app.repositories.sqlalchemy import SqlAlchemyAIReportRepository
 from app.indicators import IndicatorEngine
 from app.investor_flow.providers import MockInvestorFlowProvider
+from app.local_ai import LocalAnalysisRuntime
 from app.prediction import LightweightPredictionEngine
 from app.providers.mock import MockProvider
 from app.repositories.memory import InMemoryAIReportRepository
@@ -26,7 +27,7 @@ from app.services.prediction import PredictionService
 from app.services.score import ScoreService
 
 
-def _service(repository=None):
+def _service(repository=None, local_ai=None):
     broker = BrokerAdapter([MockProvider()])
     return AIReportService(
         MarketDataService(broker),
@@ -36,6 +37,7 @@ def _service(repository=None):
         MockAIReportGenerator(),
         ComplianceValidator(),
         repository,
+        local_ai=local_ai,
     )
 
 
@@ -50,13 +52,35 @@ def test_ai_report_is_experimental_and_persists_only_after_compliance_passes():
     assert report["signal_strength"] > 0
     assert len(report["signal_basis"]) == 3
     assert report["persistence_status"] == "saved"
-    assert report["model_version"] == "ai-report-2026.3"
+    assert report["model_version"] == "ai-report-2026.4"
     assert report["agent_status"]["technical"] == "available"
     assert report["agent_status"]["chart_pattern"] == "available"
     assert report["agent_status"]["risk"] == "available"
     assert report["agent_findings"]["prediction"]["value"]["rise_probability"] is not None
-    assert report["chart_patterns"]["engine_version"] == "patterns-2026.1"
+    assert report["chart_patterns"]["engine_version"] == "patterns-2026.2"
+    assert report["agent_status"]["market_pressure"] == "available"
+    assert report["market_pressure"]["signal"] in {"buying", "selling", "balanced"}
     assert len(repository.items) == 1
+
+
+def test_ai_report_exposes_local_model_readiness_without_external_api(tmp_path):
+    report = _service(local_ai=LocalAnalysisRuntime(tmp_path)).report(
+        "005930", horizon_days=5, limit=180
+    )
+
+    assert set(report["local_ai_findings"]) == {
+        "technical",
+        "financial",
+        "news",
+        "investor_flow",
+        "risk",
+    }
+    assert all(
+        finding["status"] == "model_missing"
+        for finding in report["local_ai_findings"].values()
+    )
+    assert report["local_ai_synthesis"]["status"] == "quality_rejected"
+    assert report["local_ai_synthesis"]["available_agents"] == 0
 
 
 def test_ai_report_reuses_score_candles_and_warning_facts():
@@ -87,8 +111,8 @@ def test_ai_report_reuses_score_candles_and_warning_facts():
 
     service.report("005930", horizon_days=5, limit=180)
 
-    # Score and prediction each need candles; support/resistance reuses the score window.
-    assert provider.candle_calls == 2
+    # Prediction, chart patterns, and support/resistance reuse the validated score window.
+    assert provider.candle_calls == 1
     assert provider.warning_calls == 1
 
 

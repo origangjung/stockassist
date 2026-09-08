@@ -1,3 +1,5 @@
+"""metrics 파일은 전략 검증과 성과 계산 기능을 담당한다."""
+
 from math import sqrt
 
 import pandas as pd
@@ -12,6 +14,8 @@ def calculate_metrics(
     observation_count: int,
     config: BacktestConfig,
 ) -> PerformanceMetrics:
+    """`calculate_metrics`은(는) 입력 데이터를 기준으로 모델 또는 규칙의 결과 값을 계산해 반환합니다."""
+
     final_equity = float(equity.iloc[-1])
     total_return = final_equity / config.initial_capital - 1
     years = max(

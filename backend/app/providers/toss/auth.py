@@ -1,3 +1,5 @@
+"""auth 파일은 외부 데이터 공급자 연동 기능을 담당한다."""
+
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,11 +21,15 @@ from app.providers.toss.rate_limit import TossRateLimiter
 
 @dataclass(frozen=True)
 class AccessToken:
+    """`AccessToken` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     value: str
     expires_at: float
 
 
 class TokenCache(Protocol):
+    """`TokenCache` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     def get(self, key: str) -> AccessToken | None: ...
 
     def set(self, key: str, token: AccessToken) -> None: ...
@@ -34,22 +40,34 @@ class TokenCache(Protocol):
 
 
 class InMemoryTokenCache:
+    """`InMemoryTokenCache` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     def __init__(self) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._tokens: dict[str, AccessToken] = {}
 
     def get(self, key: str) -> AccessToken | None:
+        """`get`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return self._tokens.get(key)
 
     def set(self, key: str, token: AccessToken) -> None:
+        """`set`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._tokens[key] = token
 
     def delete(self, key: str, expected_value: str | None = None) -> None:
+        """`delete`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         current = self._tokens.get(key)
         if expected_value is None or (current and current.value == expected_value):
             self._tokens.pop(key, None)
 
     @contextmanager
     def issue_lock(self, key: str) -> Iterator[None]:
+        """`issue_lock`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         del key
         yield
 
@@ -58,11 +76,15 @@ class RedisTokenCache:
     """Redis TTL cache with a process-local fallback for transient Redis outages."""
 
     def __init__(self, redis_url: str, *, clock=time.time) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._redis = Redis.from_url(redis_url, decode_responses=True)
         self._fallback = InMemoryTokenCache()
         self._clock = clock
 
     def get(self, key: str) -> AccessToken | None:
+        """`get`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         try:
             value = self._redis.get(key)
             ttl = self._redis.ttl(key) if value is not None else -2
@@ -75,6 +97,8 @@ class RedisTokenCache:
         return token
 
     def set(self, key: str, token: AccessToken) -> None:
+        """`set`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._fallback.set(key, token)
         ttl = max(1, int(token.expires_at - self._clock()))
         try:
@@ -83,6 +107,8 @@ class RedisTokenCache:
             pass
 
     def delete(self, key: str, expected_value: str | None = None) -> None:
+        """`delete`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._fallback.delete(key, expected_value)
         try:
             if expected_value is None:
@@ -100,6 +126,8 @@ class RedisTokenCache:
 
     @contextmanager
     def issue_lock(self, key: str) -> Iterator[None]:
+        """`issue_lock`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         lock = self._redis.lock(f"{key}:issue-lock", timeout=15, blocking_timeout=10)
         try:
             acquired = lock.acquire(blocking=True)
@@ -121,6 +149,8 @@ class RedisTokenCache:
 
 
 class TossTokenManager:
+    """`TossTokenManager` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     def __init__(
         self,
         client: httpx2.Client,
@@ -132,6 +162,8 @@ class TossTokenManager:
         clock=time.time,
         audit_sink: ProviderAuditSink | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._client = client
         self._limiter = limiter
         self._client_id = client_id
@@ -143,6 +175,8 @@ class TossTokenManager:
         self._cache_key = f"toss:oauth:{client_id}"
 
     def get(self) -> str:
+        """`get`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         token = self._cache.get(self._cache_key)
         if self._usable(token):
             return token.value
@@ -154,12 +188,18 @@ class TossTokenManager:
                 return self._issue().value
 
     def invalidate(self, expected_token: str | None = None) -> None:
+        """`invalidate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._cache.delete(self._cache_key, expected_token)
 
     def _usable(self, token: AccessToken | None) -> bool:
+        """`_usable`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return token is not None and token.expires_at - 30 > self._clock()
 
     def _issue(self) -> AccessToken:
+        """`_issue`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         started_at = perf_counter()
         occurred_at = datetime.now(timezone.utc)
         internal_request_id = current_request_id()
@@ -267,6 +307,8 @@ class TossTokenManager:
         started_at: float,
         occurred_at: datetime,
     ) -> None:
+        """`_record_audit`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         record_toss_audit(
             self._audit_sink,
             method="POST",
@@ -284,6 +326,8 @@ class TossTokenManager:
 
 
 def _json_object(response: httpx2.Response) -> dict:
+    """`_json_object`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     try:
         payload = response.json()
     except ValueError as exc:

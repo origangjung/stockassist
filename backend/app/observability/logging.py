@@ -1,3 +1,5 @@
+"""logging 파일은 백엔드 도메인 기능을 담당한다."""
+
 import logging
 from typing import Literal
 
@@ -8,6 +10,8 @@ def configure_logging(
     level_name: str = "INFO",
     output_format: Literal["json", "console"] = "json",
 ) -> None:
+    """`configure_logging`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     level = getattr(logging, level_name.upper(), logging.INFO)
     shared_processors = [
         structlog.contextvars.merge_contextvars,

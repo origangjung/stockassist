@@ -1,3 +1,5 @@
+"""portfolio 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from dataclasses import asdict
 
 from app.adapters.broker import BrokerAdapter
@@ -17,11 +19,15 @@ class PortfolioService:
         sync_enabled: bool,
         repository: PortfolioRepository | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._broker = broker
         self._sync_enabled = sync_enabled
         self._repository = repository
 
     def accounts(self) -> dict:
+        """`accounts`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._require_enabled()
         provider = self._broker.provider_for(Capability.ACCOUNT_SYNC)
         return {
@@ -30,6 +36,8 @@ class PortfolioService:
         }
 
     def sync(self, account_seq: int) -> dict:
+        """`sync`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._require_enabled()
         provider = self._broker.provider_for(Capability.ACCOUNT_SYNC)
         account = self._account(provider.get_accounts(), account_seq)
@@ -50,12 +58,16 @@ class PortfolioService:
 
     @staticmethod
     def _account(accounts: list[BrokerAccount], account_seq: int) -> BrokerAccount:
+        """`_account`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         for account in accounts:
             if account.account_seq == account_seq:
                 return account
         raise ProviderNotFoundError("Broker account was not found", code="account-not-found")
 
     def _require_enabled(self) -> None:
+        """`_require_enabled`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not self._sync_enabled:
             raise ProviderForbiddenError(
                 "Account synchronization is disabled. Set ACCOUNT_SYNC_ENABLED=true only on a protected server.",
@@ -65,6 +77,8 @@ class PortfolioService:
 
     @staticmethod
     def _account_data(account: BrokerAccount) -> dict:
+        """`_account_data`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return {
             "account_seq": account.account_seq,
             "account_no_masked": _mask_account_no(account.account_no),
@@ -73,6 +87,8 @@ class PortfolioService:
 
     @staticmethod
     def _summary(snapshot: HoldingsSnapshot) -> dict:
+        """`_summary`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return {
             "total_purchase_amount": snapshot.total_purchase_amount,
             "market_value": snapshot.market_value,
@@ -87,6 +103,8 @@ class PortfolioService:
 
     @staticmethod
     def _holding_data(snapshot: HoldingsSnapshot) -> list[dict]:
+        """`_holding_data`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         totals = snapshot.market_value
         rows: list[dict] = []
         for holding in snapshot.holdings:
@@ -97,5 +115,7 @@ class PortfolioService:
 
 
 def _mask_account_no(account_no: str) -> str:
+    """`_mask_account_no`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     visible = account_no[-4:]
     return f"{'*' * max(0, len(account_no) - len(visible))}{visible}"

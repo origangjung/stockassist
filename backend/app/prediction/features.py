@@ -1,3 +1,5 @@
+"""features 파일은 백엔드 도메인 기능을 담당한다."""
+
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -8,6 +10,8 @@ from app.providers.contracts import Candle
 
 @dataclass(frozen=True)
 class FeatureDataset:
+    """`FeatureDataset` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     features: np.ndarray
     labels: np.ndarray
     prediction_features: np.ndarray
@@ -29,6 +33,8 @@ FEATURE_NAMES = (
 def build_feature_dataset(
     candles: list[Candle], horizon_days: int, lookback: int = 20
 ) -> FeatureDataset:
+    """`build_feature_dataset`은(는) 입력 값과 설정을 결합해 새 결과 객체를 생성합니다."""
+
     if horizon_days < 1:
         raise ValueError("horizon_days must be positive")
     if len(candles) < lookback + horizon_days + 20:
@@ -51,6 +57,8 @@ def build_feature_dataset(
 
 
 def _features_at(close: np.ndarray, volume: np.ndarray, index: int) -> np.ndarray:
+    """`_features_at`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     history = close[: index + 1]
     volumes = volume[: index + 1]
     returns = np.diff(history) / history[:-1]

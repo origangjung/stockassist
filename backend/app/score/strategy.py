@@ -1,3 +1,5 @@
+"""strategy 파일은 백엔드 도메인 기능을 담당한다."""
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -13,6 +15,8 @@ class TechnicalScoreStrategy(Strategy):
     """Historical score threshold strategy for validation through BacktestEngine."""
 
     def __init__(self, threshold: float = 65):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         if not 0 <= threshold <= 100:
             raise ValueError("threshold must be between 0 and 100")
         self.threshold = threshold
@@ -22,6 +26,8 @@ class TechnicalScoreStrategy(Strategy):
         self._score = ScoreEngine()
 
     def signals(self, frame: pd.DataFrame) -> pd.Series:
+        """`signals`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         candles = [
             Candle(
                 timestamp=value.timestamp

@@ -2,7 +2,7 @@
 
 AI 기반 투자 의사결정 지원 플랫폼입니다. Blueprint v2.1에 따라 시장 데이터, 분석·백테스트, AI 참고 리포트, 본인 계좌 포트폴리오, 참고 알림, 준실시간·KIS 스트리밍 골격을 단계적으로 구현하고 있습니다.
 
-다른 사용자에게 공유할 수 있는 기능 소개와 빠른 시작 안내는 [프로젝트 소개](PROJECT_INTRODUCTION.md)에서 확인할 수 있습니다.
+기능 소개는 [프로젝트 소개](docs/architecture/project-introduction.md), 폴더 책임은 [프로젝트 구조](docs/maintenance/project-structure-ko.md)에서 확인할 수 있습니다.
 
 ## 실행
 
@@ -36,6 +36,53 @@ pnpm --filter @stockpilot/web dev
 
 기본값인 `STOCK_PROVIDER=mock`, `AI_REPORT_PROVIDER=mock`에서는 Toss·OpenAI API 키나
 외부 호출 비용 없이 검색·차트·참고 시그널 UI를 확인할 수 있다.
+
+## 직접 학습 로컬 분석 AI
+
+외부 LLM API 없이 직접 학습한 5개 전문 모델을 선택적으로 실행할 수 있다. 전문 모델은
+기술, 재무, 뉴스·공시, 수급, 위험 분석별로 분리된다. 최종 진단은 품질 승인을 통과한
+전문 모델만 신뢰도 가중 규칙으로 조합하며, 검증 성능이 부족한 기존 학습형 종합 모델은
+운영 판정에서 제외한다.
+모든 모델은 JSON 아티팩트만 로드하며 Pickle이나 원격 모델 코드는 실행하지 않는다. 모델
+파일이 없거나 입력 특성이 부족하면 해당 모델만 제외되고 기존 규칙 기반 분석은 계속된다.
+
+학습 CSV는 시간순으로 정렬하고 파일명을 `technical.csv`, `financial.csv`, `news.csv`,
+`investor_flow.csv`, `risk.csv`, `synthesis.csv`로 만든다. 각 파일에는 아래 특성과 이진
+`label` 열이 필요하다.
+마지막 20% 행은 시간순 검증 구간으로 자동 분리되며 파일당 최소 50개 라벨 행이 필요하다.
+
+| 모델      | 특성 열                                                                           | `label=1` 의미                 |
+| --------- | --------------------------------------------------------------------------------- | ------------------------------ |
+| 기술      | `technical_score,rise_probability,pattern_count,range_width`                      | 설정 기간 뒤 양의 수익률       |
+| 재무      | `financial_score,score_coverage,rise_probability`                                 | 다음 관측 시점의 펀더멘털 개선 |
+| 뉴스·공시 | `news_score,disclosure_score,warning_count`                                       | 사건 뒤 양의 초과수익          |
+| 수급      | `net_quantity,rise_probability,score_coverage`                                    | 다음 관측 시점의 순유입        |
+| 위험      | `warning_count,rise_probability,score_coverage,range_width`                       | 설정 기간 안의 하락 위험 사건  |
+| 최종 종합 | 각 전문 모델의 `{agent}_probability,{agent}_confidence,{agent}_available` 15개 열 | 설정 기간 뒤 양의 수익률       |
+
+`synthesis.csv`의 전문 모델 확률은 반드시 각 행보다 과거 데이터로만 학습한 모델의
+out-of-time 또는 out-of-fold 예측이어야 한다. 전문 모델이 이미 학습한 행을 다시 예측한
+in-sample 값은 종합 모델의 성능을 부풀리므로 사용할 수 없다. 라벨 기간이 겹치는 행은
+학습·검증 경계에서 제거해야 한다.
+
+```powershell
+.venv\Scripts\python.exe scripts/ai/training/train_local_agents.py --data-dir .\datasets\local-ai
+$env:LOCAL_AI_ENABLED="true"
+$env:LOCAL_AI_ARTIFACT_DIR=".\artifacts\local-ai"
+uv run python -m uvicorn app.main:app --app-dir backend --reload
+```
+
+학습 결과에는 모델 버전, 시간순 검증 정확도와 Brier score가 저장된다. 데이터 출처,
+수집·학습·중첩 검증·수동 승격의 전체 절차는 [직접 학습 AI 설명서](docs/AI_TRAINING_GUIDE_KO.md)를 따른다.
+전문 AI마다 다른 정답 기간과 마이그레이션 규칙은 [전문 AI별 예측 기간 정책](docs/architecture/local-ai-horizon-policy-ko.md)에 정리되어 있다.
+
+뉴스·SEC 재무 학습 데이터는 별도 Docker 프로필에서 운영 모델과 분리해 증분 수집한다.
+먼저 `docker compose --profile collection run --rm collector --dry-run`으로 예정 작업을 확인한 뒤
+`docker compose --profile collection run --rm collector`를 실행한다. 수집기는 일일 호출 상한,
+중복 실행 잠금, 시점 기준 결합을 적용하며 모델 artifact에는 접근하지 않는다. 매 실행 후
+`datasets/local-ai-incremental/dataset-readiness.json`에 구조 품질과 후보 재학습 준비도를
+분리해 기록한다. 자세한 정책은
+[로컬 AI 증분 데이터 수집](docs/operations/local-ai-incremental-collection.md)을 참고한다.
 
 Docker Compose 전체 스택은 Nginx를 통해 `http://localhost:8080`에서 접근한다.
 서비스 포트는 기본적으로 로컬 호스트에만 바인딩되고, 웹 컨테이너는 Next.js 프로덕션 빌드로 실행된다. 외부 배포 시 `PUBLIC_API_URL`, HTTPS, 강력한 비밀번호와 시크릿 매니저를 별도로 설정해야 한다. 보안 기준은 [보안 설계](docs/architecture/security.md)를 참고한다.
@@ -108,7 +155,7 @@ SEC EDGAR는 공시 교차검증 용도로만 사용한다. 두 거래소 데이
 모든 분석 경로로 전달되며, 해당 규칙 버전도 함께 저장된다. 자세한 내용은
 [캔들 보정 기준 provenance와 inventory](docs/architecture/candle-price-basis-inventory.md)를 확인한다.
 
-`ACCOUNT_SYNC_ENABLED=true`이면 `/admin`에서 마스킹된 본인 계좌를 수동 동기화하고 통화별 포트폴리오 집중도와 손실 노출을 확인할 수 있다. 계좌 API는 관리자 키로 보호되며 주문 기능은 없다.
+`ACCOUNT_SYNC_ENABLED=true`이면 `/admin`에서 마스킹된 본인 계좌를 수동 동기화하고 통화별 포트폴리오 집중도와 손실 노출을 확인할 수 있다. 계좌 API는 관리자 키로 보호된다. 실제 주문 API는 별도 `TOSS_TRADING_ENABLED`와 정확한 확인 문구가 모두 있어야 실행되며 기본값은 잠금이다.
 
 ## 현재 범위
 
@@ -117,7 +164,7 @@ SEC EDGAR는 공시 교차검증 용도로만 사용한다. 두 거래소 데이
 - 표준 API 응답 envelope 및 request ID
 - 투자 자문이 아님을 명시하는 compliance 메타데이터
 
-`STOCK_PROVIDER=toss`와 Toss OAuth 자격증명을 설정하면 현재가·일봉·호가·체결·종목 정보·투자유의 데이터를 Toss Open API에서 조회합니다. 본인 계좌 동기화는 명시적으로 `ACCOUNT_SYNC_ENABLED=true`일 때만 열리며, 주문 API는 제공하지 않습니다. KIS 자격증명과 `REALTIME_SOURCE=kis`를 설정하면 KIS WebSocket 스트리밍을 사용할 수 있습니다.
+`STOCK_PROVIDER=toss`와 Toss OAuth 자격증명을 설정하면 현재가·캔들·호가·체결·종목·수급·시장 지표를 Toss Open API에서 조회합니다. 본인 계좌 동기화와 실제 주문은 각각 별도 기능 플래그로 보호됩니다. `REALTIME_SOURCE=toss` 또는 `kis`를 설정하면 해당 공급자의 WebSocket 시세를 사용할 수 있습니다.
 
 ## 노트북 검증
 
@@ -127,7 +174,7 @@ SEC EDGAR는 공시 교차검증 용도로만 사용한다. 두 거래소 데이
 ```powershell
 .venv\Scripts\pytest.exe -q -m "not ml"
 & .venv\Scripts\ruff.exe check backend
-& 'C:\stock_assist\apps\web\node_modules\.bin\tsc.CMD' -p apps/web/tsconfig.json --noEmit --incremental false
+frontend\node_modules\.bin\tsc.CMD -p frontend/tsconfig.json --noEmit --incremental false
 ```
 
 XGBoost 장기 학습·artifact 검증은 `uv sync --locked --extra dev --extra ml`를 사용한 데스크톱

@@ -1,3 +1,5 @@
+"""validation 파일은 백엔드 도메인 기능을 담당한다."""
+
 from collections.abc import Iterator
 
 import numpy as np
@@ -7,11 +9,15 @@ class PurgedWalkForwardSplit:
     """Expanding-window chronological split with a label-horizon purge gap."""
 
     def __init__(self, *, horizon_days: int, min_train_size: int = 60, n_splits: int = 3) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.horizon_days = horizon_days
         self.min_train_size = min_train_size
         self.n_splits = n_splits
 
     def split(self, sample_count: int) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+        """`split`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         test_size = max(
             10, (sample_count - self.min_train_size - self.horizon_days) // self.n_splits
         )

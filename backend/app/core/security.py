@@ -1,3 +1,5 @@
+"""security 파일은 백엔드 도메인 기능을 담당한다."""
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -9,7 +11,11 @@ _SENSITIVE_PREFIXES = (
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """요청과 응답 사이에서 공통 정책을 적용하는 미들웨어입니다."""
+
     async def dispatch(self, request: Request, call_next):
+        """`dispatch`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")

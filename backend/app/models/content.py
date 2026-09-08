@@ -1,3 +1,5 @@
+"""content 파일은 데이터베이스 영속 모델 기능을 담당한다."""
+
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Index, Integer, String, Text
@@ -7,6 +9,8 @@ from app.database.base import Base
 
 
 class DisclosureModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "disclosures"
     __table_args__ = (
         Index("ix_disclosures_symbol_filed_at", "symbol", "filed_at"),
@@ -30,6 +34,8 @@ class DisclosureModel(Base):
 
 
 class NewsArticleModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "news"
     __table_args__ = (
         Index("ix_news_symbol_published_at", "symbol", "published_at"),

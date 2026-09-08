@@ -1,3 +1,5 @@
+"""sqlalchemy 파일은 데이터 저장과 조회 기능을 담당한다."""
+
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -42,6 +44,8 @@ def _validate_candle_provenance(
     source_provider: str,
     price_basis_rule_version: str,
 ) -> None:
+    """`_validate_candle_provenance`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
     if not source_provider or len(source_provider) > 32:
         raise ValueError("Candle source provider must contain 1 to 32 characters")
     if not price_basis_rule_version or len(price_basis_rule_version) > 32:
@@ -49,6 +53,8 @@ def _validate_candle_provenance(
 
 
 def _upsert_stock(session: Session, stock: StockInfo) -> None:
+    """`_upsert_stock`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
     model = session.get(StockModel, stock.symbol)
     if model is None:
         session.add(StockModel(**stock.__dict__))
@@ -71,6 +77,8 @@ def _save_candles(
     source_provider: str,
     price_basis_rule_version: str,
 ) -> None:
+    """`_save_candles`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
     for candle in candles:
         model = session.scalar(
             select(StockCandleModel).where(
@@ -112,6 +120,8 @@ def _save_quality_logs(
     symbol: str,
     logs: list[DataQualityLog],
 ) -> None:
+    """`_save_quality_logs`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
     session.add_all(
         [
             DataQualityLogModel(
@@ -127,16 +137,26 @@ def _save_quality_logs(
 
 
 class SqlAlchemyStockRepository(StockRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def upsert(self, stock: StockInfo) -> None:
+        """`upsert`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._sessions.begin() as session:
             _upsert_stock(session, stock)
 
 
 class SqlAlchemyCandleRepository(CandleRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save_many(
@@ -150,6 +170,8 @@ class SqlAlchemyCandleRepository(CandleRepository):
         source_provider: str,
         price_basis_rule_version: str,
     ) -> None:
+        """`save_many`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         _validate_candle_provenance(source_provider, price_basis_rule_version)
         with self._sessions.begin() as session:
             _save_candles(
@@ -164,6 +186,8 @@ class SqlAlchemyCandleRepository(CandleRepository):
             )
 
     def find(self, symbol: str, *, interval: str, stage: str, limit: int) -> list[Candle]:
+        """`find`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._sessions() as session:
             statement = (
                 select(StockCandleModel)
@@ -195,6 +219,8 @@ class SqlAlchemyCandleRepository(CandleRepository):
         symbol: str,
         limit: int = 200,
     ) -> CandlePriceBasisInventory:
+        """`price_basis_inventory`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         filters = [StockCandleModel.symbol == symbol]
         group_columns = (
             StockCandleModel.source_provider,
@@ -284,9 +310,13 @@ class SqlAlchemyCandleIngestionRepository(CandleIngestionRepository):
     """Persist one complete candle ingestion in a single database transaction."""
 
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save(self, batch: CandleIngestionWrite) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._validate_provenance(batch)
         with self._sessions.begin() as session:
             self._upsert_stock(session, batch.stock)
@@ -315,6 +345,8 @@ class SqlAlchemyCandleIngestionRepository(CandleIngestionRepository):
 
     @staticmethod
     def _validate_provenance(batch: CandleIngestionWrite) -> None:
+        """`_validate_provenance`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         _validate_candle_provenance(
             batch.source_provider,
             batch.price_basis_rule_version,
@@ -322,6 +354,8 @@ class SqlAlchemyCandleIngestionRepository(CandleIngestionRepository):
 
     @staticmethod
     def _upsert_stock(session: Session, stock: StockInfo) -> None:
+        """`_upsert_stock`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         _upsert_stock(session, stock)
 
     @staticmethod
@@ -336,6 +370,8 @@ class SqlAlchemyCandleIngestionRepository(CandleIngestionRepository):
         source_provider: str,
         price_basis_rule_version: str,
     ) -> None:
+        """`_save_candles`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         _save_candles(
             session,
             symbol,
@@ -353,14 +389,22 @@ class SqlAlchemyCandleIngestionRepository(CandleIngestionRepository):
         symbol: str,
         logs: list[DataQualityLog],
     ) -> None:
+        """`_save_quality_logs`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         _save_quality_logs(session, symbol, logs)
 
 
 class SqlAlchemyQualityLogRepository(QualityLogRepository, QualityLogReadRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save_many(self, symbol: str, logs: list[DataQualityLog]) -> None:
+        """`save_many`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         with self._sessions.begin() as session:
             _save_quality_logs(session, symbol, logs)
 
@@ -372,6 +416,8 @@ class SqlAlchemyQualityLogRepository(QualityLogRepository, QualityLogReadReposit
         symbol: str | None = None,
         severity: str | None = None,
     ) -> tuple[list[DataQualityLogRecord], int, dict[str, int]]:
+        """`list_recent`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         filters = []
         if symbol:
             filters.append(DataQualityLogModel.symbol == symbol)
@@ -421,10 +467,16 @@ class SqlAlchemyQualityLogRepository(QualityLogRepository, QualityLogReadReposit
 
 
 class SqlAlchemyFinancialRepository(FinancialRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save(self, snapshot: FinancialSnapshot, *, source: str) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._sessions.begin() as session:
             company = session.get(CompanyModel, snapshot.symbol)
             if company is None:
@@ -466,10 +518,16 @@ class SqlAlchemyFinancialRepository(FinancialRepository):
 
 
 class SqlAlchemyDisclosureRepository(DisclosureRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save_many(self, disclosures: list[Disclosure], *, source: str) -> None:
+        """`save_many`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         with self._sessions.begin() as session:
             for disclosure in disclosures:
                 model = session.scalar(
@@ -486,10 +544,16 @@ class SqlAlchemyDisclosureRepository(DisclosureRepository):
 
 
 class SqlAlchemyNewsRepository(NewsRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save_many(self, articles: list[NewsArticle], *, source: str) -> None:
+        """`save_many`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         with self._sessions.begin() as session:
             for article in articles:
                 model = session.scalar(
@@ -504,10 +568,16 @@ class SqlAlchemyNewsRepository(NewsRepository):
 
 
 class SqlAlchemyInvestorFlowRepository(InvestorFlowRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save(self, flow: InvestorFlow, *, source: str) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._sessions.begin() as session:
             model = session.scalar(
                 select(InvestorFlowModel).where(
@@ -525,10 +595,16 @@ class SqlAlchemyInvestorFlowRepository(InvestorFlowRepository):
 
 
 class SqlAlchemyPredictionRepository(PredictionRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save(self, prediction: PredictionResult, *, algorithm: str) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._sessions.begin() as session:
             version = session.get(ModelVersionModel, prediction.model_version)
             if version is None:
@@ -565,6 +641,8 @@ class SqlAlchemyPredictionRepository(PredictionRepository):
         algorithm: str | None = None,
         horizon_days: int | None = None,
     ) -> tuple[list[ModelVersionRecord], int]:
+        """`list_versions`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         filters = []
         if symbol is not None:
             filters.append(ModelVersionModel.scope_symbol == symbol)
@@ -589,11 +667,15 @@ class SqlAlchemyPredictionRepository(PredictionRepository):
             ], int(total)
 
     def get_version(self, version: str) -> ModelVersionRecord | None:
+        """`get_version`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         with self._sessions() as session:
             model = session.get(ModelVersionModel, version)
             return None if model is None else _model_version_record(model)
 
     def promote(self, version: str) -> ModelVersionRecord | None:
+        """`promote`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._sessions.begin() as session:
             target = session.get(ModelVersionModel, version, with_for_update=True)
             if target is None:
@@ -616,7 +698,11 @@ class SqlAlchemyPredictionRepository(PredictionRepository):
 
 
 class SqlAlchemyAIReportRepository(AIReportRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save(self, report: dict) -> None:
@@ -625,6 +711,8 @@ class SqlAlchemyAIReportRepository(AIReportRepository):
         # engines. Keep the in-memory report numerically precise for the caller,
         # but persist an explicitly JSON-safe snapshot at this infrastructure
         # boundary. Decimal values are strings so no precision is lost.
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         persisted_report = jsonable_encoder(report, custom_encoder={Decimal: str})
         with self._sessions.begin() as session:
             session.add(
@@ -640,12 +728,18 @@ class SqlAlchemyAIReportRepository(AIReportRepository):
 
 
 class SqlAlchemyPortfolioRepository(PortfolioRepository):
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save_snapshot(
         self, provider: str, account: BrokerAccount, snapshot: HoldingsSnapshot
     ) -> None:
+        """`save_snapshot`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         with self._sessions.begin() as session:
             model = session.scalar(
                 select(BrokerAccountModel).where(
@@ -685,11 +779,15 @@ class SqlAlchemyPortfolioRepository(PortfolioRepository):
 
 
 def _mask_account_no(account_no: str) -> str:
+    """`_mask_account_no`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     visible = account_no[-4:]
     return f"{'*' * max(0, len(account_no) - len(visible))}{visible}"
 
 
 def _model_version_record(model: ModelVersionModel) -> ModelVersionRecord:
+    """`_model_version_record`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return ModelVersionRecord(
         version=model.version,
         symbol=model.scope_symbol,

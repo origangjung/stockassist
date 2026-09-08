@@ -1,3 +1,5 @@
+"""ai_report 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -6,6 +8,7 @@ from app.ai_reports.compliance import ComplianceValidator
 from app.ai_reports.contracts import AIReportGenerator
 from app.ai_reports.signals import derive_reference_signal
 from app.core.compliance import DISCLAIMER
+from app.local_ai import LocalAnalysisRuntime
 from app.repositories.contracts import AIReportRepository
 from app.services.investor_flow import InvestorFlowService
 from app.services.market import MarketDataService
@@ -13,7 +16,7 @@ from app.services.prediction import PredictionService
 from app.services.score import ScoreService
 
 
-REPORT_VERSION = "ai-report-2026.3"
+REPORT_VERSION = "ai-report-2026.4"
 
 
 class AIReportService:
@@ -28,10 +31,14 @@ class AIReportService:
         generator: AIReportGenerator,
         validator: ComplianceValidator,
         repository: AIReportRepository | None = None,
+        local_ai: LocalAnalysisRuntime | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._generator = generator
         self._validator = validator
         self._repository = repository
+        self._local_ai = local_ai
         self._orchestrator = MasterAnalysisOrchestrator(
             market,
             score,
@@ -40,6 +47,8 @@ class AIReportService:
         )
 
     def report(self, symbol: str, *, horizon_days: int, limit: int) -> dict:
+        """`report`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         facts, status = self._collect_facts(symbol, horizon_days=horizon_days, limit=limit)
         generated = self._generator.generate(facts)
         data_as_of = _latest_as_of(facts) or datetime.now(timezone.utc)
@@ -70,10 +79,13 @@ class AIReportService:
             "risk_factors": _required_text_list(generated, "risk_factors"),
             "counterpoints": _required_text_list(generated, "counterpoints"),
             "chart_patterns": facts.get("chart_patterns"),
+            "market_pressure": facts.get("market_pressure"),
             "support_resistance": facts.get("support_resistance"),
             "risk_warnings": warnings,
             "agent_status": status,
             "agent_findings": facts.get("agent_findings", {}),
+            "local_ai_findings": facts.get("local_ai_findings", {}),
+            "local_ai_synthesis": facts.get("local_ai_synthesis"),
             "data_as_of": data_as_of,
             "disclaimer": DISCLAIMER,
             "is_investment_advice": False,
@@ -86,14 +98,27 @@ class AIReportService:
         return report
 
     def _collect_facts(self, symbol: str, *, horizon_days: int, limit: int) -> tuple[dict, dict]:
-        return self._orchestrator.collect(
+        """`_collect_facts`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
+        facts, status = self._orchestrator.collect(
             symbol,
             horizon_days=horizon_days,
             limit=limit,
         )
+        if self._local_ai is not None:
+            facts["local_ai_findings"] = self._local_ai.analyze(facts, symbol=symbol)
+            facts["local_ai_synthesis"] = self._local_ai.synthesize(
+                facts["local_ai_findings"],
+                symbol=symbol,
+                stock=facts.get("stock"),
+                macro_features=facts.get("local_macro_features"),
+            )
+        return facts, status
 
 
 def _latest_as_of(facts: dict) -> datetime | None:
+    """`_latest_as_of`은(는) 필요한 데이터를 조회해 반환합니다."""
+
     candidates: list[datetime] = []
     for source in (facts.get("score"), facts.get("prediction"), facts.get("investor_flow")):
         value = _value(source, "data_as_of")
@@ -103,10 +128,14 @@ def _latest_as_of(facts: dict) -> datetime | None:
 
 
 def _value(source: dict | None, name: str):
+    """`_value`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return source.get(name) if isinstance(source, dict) else None
 
 
 def _confidence(prediction: dict | None) -> str:
+    """`_confidence`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if not isinstance(prediction, dict):
         return "low"
     lower, upper = prediction.get("confidence_lower"), prediction.get("confidence_upper")
@@ -117,6 +146,8 @@ def _confidence(prediction: dict | None) -> str:
 
 
 def _required_text(generated: dict, key: str) -> str:
+    """`_required_text`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     value = generated.get(key)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"AI report generator omitted {key}")
@@ -124,6 +155,8 @@ def _required_text(generated: dict, key: str) -> str:
 
 
 def _required_text_list(generated: dict, key: str) -> list[str]:
+    """`_required_text_list`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     value = generated.get(key)
     if (
         not isinstance(value, list)

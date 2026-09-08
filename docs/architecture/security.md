@@ -86,14 +86,14 @@ No broker credential or full account number is stored in the database. Account s
 - pnpm uses a frozen lockfile in CI. Dependency install scripts are denied by default, with only Next.js image optimization dependency `sharp` explicitly allowed.
 - CI runs a high-severity production pnpm audit. Dependabot checks GitHub Actions and pnpm workspace
   dependencies weekly; immutable Action SHAs must remain in place when accepting its updates.
-- Next.js is pinned to 15.5.18 and React/React DOM to the 19.1.7 security backport. These versions address the official React Server Components advisory and the Next.js 15 security fixes, including the WebSocket-upgrade SSRF advisory.
+- Next.js is pinned to 15.5.21 and React/React DOM to the 19.1.7 security backport. These versions address the official React Server Components advisory and the Next.js 15 security fixes, including the WebSocket-upgrade SSRF advisory.
 - `postcss` is overridden to 8.5.10 or newer within the lockfile to address GHSA-qx2v-qp2m-jg93.
 - Run `pnpm audit --prod` and `uv tool run pip-audit --path .venv/Lib/site-packages --skip-editable` during dependency-update reviews.
 
 Run the lightweight repository admission check locally with:
 
 ```powershell
-python scripts/check_repository_hygiene.py
+python scripts/operations/check_repository_hygiene.py
 git diff --check
 ```
 
@@ -106,5 +106,5 @@ requires credential-like template values to stay empty or use the literal `chang
 The check reads `.env.example` only and never opens the developer's local `.env` file. Run it with:
 
 ```powershell
-python scripts/check_env_contract.py
+python scripts/operations/check_env_contract.py
 ```

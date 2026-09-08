@@ -1,3 +1,5 @@
+"""messages 파일은 실시간 시세 연결 기능을 담당한다."""
+
 from datetime import UTC, datetime
 
 from app.providers.contracts import Quote
@@ -5,6 +7,8 @@ from app.realtime.contracts import QuoteMessage
 
 
 def quote_message(quote: Quote, provider: str) -> QuoteMessage:
+    """`quote_message`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     as_of = quote.as_of or datetime.now(UTC)
     return {
         "type": "quote",

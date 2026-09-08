@@ -1,3 +1,5 @@
+"""backtest 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from dataclasses import asdict
 
 from app.adapters.broker import BrokerAdapter
@@ -18,6 +20,8 @@ from app.corporate_actions import CorporateActionAdjustmentUnavailableError
 
 
 class BacktestService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(
         self,
         broker: BrokerAdapter,
@@ -26,6 +30,8 @@ class BacktestService:
         event_engine: EventDrivenBacktestEngine | None = None,
         corporate_actions: CorporateActionService | None = None,
     ):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._broker = broker
         self._engine = engine
         self._event_engine = event_engine or EventDrivenBacktestEngine()
@@ -49,6 +55,8 @@ class BacktestService:
         max_volume_participation: float = 1.0,
         corporate_action_mode: str = "none",
     ) -> dict:
+        """`run`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         strategy = self._strategy(strategy_name, fast_period, slow_period)
         provider, candles, adjustment = self._load_candles(symbol, limit, corporate_action_mode)
         config = BacktestConfig(
@@ -96,6 +104,8 @@ class BacktestService:
         max_volume_participation: float = 1.0,
         corporate_action_mode: str = "none",
     ) -> dict:
+        """`validate_walk_forward`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         provider, candles, adjustment = self._load_candles(symbol, limit, corporate_action_mode)
         config = BacktestConfig(
             initial_capital=initial_capital,
@@ -346,6 +356,8 @@ class BacktestService:
 
     @staticmethod
     def _strategy(strategy_name: str, fast_period: int, slow_period: int):
+        """`_strategy`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if strategy_name == "ma_cross":
             return MovingAverageCrossStrategy(fast_period, slow_period)
         if strategy_name == "buy_and_hold":
@@ -355,6 +367,8 @@ class BacktestService:
         raise ValueError(f"unsupported strategy: {strategy_name}")
 
     def _engine_for(self, engine_name: str):
+        """`_engine_for`은(는) 입력 조건을 지원하는 제공자나 처리 대상을 선택해 반환합니다."""
+
         if engine_name == "vectorized":
             return self._engine
         if engine_name == "event_driven":
@@ -367,6 +381,8 @@ class BacktestService:
         limit: int,
         corporate_action_mode: str,
     ):
+        """`_load_candles`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         batch = self._broker.candles(symbol, limit)
         provider = batch.provider
         candles = batch.candles
@@ -434,6 +450,8 @@ class BacktestService:
         offset: int,
         symbol: str | None = None,
     ) -> dict:
+        """`history`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self._repository is None:
             return {
                 "persistence_status": "disabled",
@@ -456,6 +474,8 @@ class BacktestService:
         }
 
     def history_detail(self, run_id: str) -> dict:
+        """`history_detail`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self._repository is None:
             raise BacktestHistoryUnavailableError("Backtest persistence is disabled")
         detail = self._repository.get_run(run_id)
@@ -465,8 +485,12 @@ class BacktestService:
 
 
 class BacktestHistoryUnavailableError(RuntimeError):
+    """해당 실패 조건을 호출 계층에 구분해 전달하는 예외입니다."""
+
     pass
 
 
 class BacktestRunNotFoundError(LookupError):
+    """해당 실패 조건을 호출 계층에 구분해 전달하는 예외입니다."""
+
     pass

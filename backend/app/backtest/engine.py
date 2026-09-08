@@ -1,3 +1,5 @@
+"""engine 파일은 전략 검증과 성과 계산 기능을 담당한다."""
+
 from dataclasses import asdict
 
 import pandas as pd
@@ -20,6 +22,8 @@ class BacktestEngine:
     def run(
         self, candles: list[Candle], strategy: Strategy, config: BacktestConfig | None = None
     ) -> BacktestResult:
+        """`run`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         config = config or BacktestConfig()
         if len(candles) < 2:
             raise ValueError("at least two candles are required")
@@ -102,6 +106,8 @@ class BacktestEngine:
         previous_equity: pd.Series,
         config: BacktestConfig,
     ) -> list[Trade]:
+        """`_trades`은(는) 이름에 해당하는 시장 또는 기업 데이터를 조회해 공통 형식으로 반환합니다."""
+
         trades: list[Trade] = []
         for index in frame.index:
             change = int(position.iloc[index] - previous_position.iloc[index])

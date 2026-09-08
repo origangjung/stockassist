@@ -1,3 +1,5 @@
+"""alerts 파일은 데이터베이스 영속 모델 기능을 담당한다."""
+
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
@@ -9,6 +11,8 @@ from app.database.base import Base
 
 
 class WatchlistModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "watchlists"
     __table_args__ = (UniqueConstraint("symbol", name="uq_watchlists_symbol"),)
 
@@ -25,6 +29,8 @@ class WatchlistModel(Base):
 
 
 class PriceAlertModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "alerts"
     __table_args__ = (
         Index("ix_alerts_status_created", "status", "created_at"),

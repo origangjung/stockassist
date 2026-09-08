@@ -1,3 +1,5 @@
+"""openai 파일은 백엔드 도메인 기능을 담당한다."""
+
 import json
 from typing import Any
 
@@ -34,6 +36,8 @@ class OpenAIReportGenerator(AIReportGenerator):
         timeout_seconds: float,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._api_key = api_key
         self.model = model
         self._client = httpx2.Client(
@@ -44,6 +48,8 @@ class OpenAIReportGenerator(AIReportGenerator):
         )
 
     def generate(self, facts: dict) -> dict:
+        """`generate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not self._api_key:
             raise ReportGenerationError(
                 "OPENAI_API_KEY is required when AI_REPORT_PROVIDER=openai",
@@ -105,10 +111,14 @@ class OpenAIReportGenerator(AIReportGenerator):
         return generated
 
     def close(self) -> None:
+        """`close`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._client.close()
 
 
 def _output_text(payload: dict[str, Any]) -> str:
+    """`_output_text`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     for output in payload.get("output", []):
         if not isinstance(output, dict):
             continue

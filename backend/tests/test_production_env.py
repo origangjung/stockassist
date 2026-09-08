@@ -1,4 +1,4 @@
-from scripts.check_production_env import validate_production_environment
+from scripts.operations.check_production_env import validate_production_environment
 
 
 def _valid_environment() -> dict[str, str]:

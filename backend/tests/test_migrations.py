@@ -8,7 +8,7 @@ from app.config import get_settings
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_HEAD = "20260720_0021"
+EXPECTED_HEAD = "20260814_0022"
 
 
 def _migration_config() -> Config:

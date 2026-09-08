@@ -1,3 +1,5 @@
+"""axes 파일은 백엔드 도메인 기능을 담당한다."""
+
 from decimal import Decimal
 from math import tanh
 from typing import Any
@@ -6,6 +8,8 @@ AxisInput = tuple[float | None, list[str]]
 
 
 def financial_axis(snapshot: dict[str, Any]) -> AxisInput:
+    """`financial_axis`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     revenue = _number(snapshot.get("revenue"))
     operating_income = _number(snapshot.get("operating_income"))
     net_income = _number(snapshot.get("net_income"))
@@ -30,6 +34,8 @@ def financial_axis(snapshot: dict[str, Any]) -> AxisInput:
 
 
 def news_axis(snapshot: dict[str, Any]) -> AxisInput:
+    """`news_axis`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     sentiment = _number(snapshot.get("sentiment_score"))
     if sentiment is None:
         return None, ["뉴스 감성 점수가 없습니다."]
@@ -39,6 +45,8 @@ def news_axis(snapshot: dict[str, Any]) -> AxisInput:
 
 
 def disclosure_axis(snapshot: dict[str, Any]) -> AxisInput:
+    """`disclosure_axis`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     disclosures = snapshot.get("disclosures")
     risk_flags = snapshot.get("risk_flags")
     if not isinstance(disclosures, list) or not isinstance(risk_flags, list):
@@ -49,6 +57,8 @@ def disclosure_axis(snapshot: dict[str, Any]) -> AxisInput:
 
 
 def investor_flow_axis(snapshot: dict[str, Any]) -> AxisInput:
+    """`investor_flow_axis`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     combined = _number(snapshot.get("foreign_institution_net_quantity"))
     if combined is None:
         return None, ["외국인·기관 합산 수급이 없습니다."]
@@ -67,6 +77,8 @@ def investor_flow_axis(snapshot: dict[str, Any]) -> AxisInput:
 
 
 def market_risk_axis(warnings: list[Any]) -> AxisInput:
+    """`market_risk_axis`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if not warnings:
         return 50.0, ["활성 종목 투자유의 신호 없음"]
     warning_types = [str(getattr(item, "warning_type", "unknown")) for item in warnings]
@@ -82,20 +94,28 @@ def market_risk_axis(warnings: list[Any]) -> AxisInput:
 
 
 def unavailable_axis(message: str) -> AxisInput:
+    """`unavailable_axis`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return None, [message]
 
 
 def _number(value: Any) -> float | None:
+    """`_number`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
         return float(value)
     return None
 
 
 def _average(components: list[float], evidence: list[str], missing: str) -> AxisInput:
+    """`_average`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if not components:
         return None, [missing]
     return round(sum(components) / len(components), 4), evidence
 
 
 def _clamp(value: float, lower: float = 0, upper: float = 100) -> float:
+    """`_clamp`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return max(lower, min(upper, value))

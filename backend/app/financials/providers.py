@@ -1,3 +1,5 @@
+"""providers 파일은 백엔드 도메인 기능을 담당한다."""
+
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -38,10 +40,17 @@ class MockFinancialProvider(FinancialProvider):
             "24200000000000",
         ),
     }
+    _issued_shares = {
+        "005930": Decimal("5969782550"),
+        "000660": Decimal("728002365"),
+        "035420": Decimal("164049085"),
+    }
 
     def get_snapshot(
         self, symbol: str, fiscal_year: int, report_code: str = "11011"
     ) -> FinancialSnapshot:
+        """`get_snapshot`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         try:
             corp_code, *amounts = self._values[symbol]
         except KeyError as exc:
@@ -67,8 +76,17 @@ class MockFinancialProvider(FinancialProvider):
             data_as_of=datetime.now(timezone.utc),
         )
 
+    def get_issued_shares(
+        self, symbol: str, fiscal_year: int, report_code: str = "11011"
+    ) -> Decimal | None:
+        """`get_issued_shares`은(는) 필요한 데이터를 조회해 반환합니다."""
+
+        return self._issued_shares.get(symbol)
+
 
 def build_financial_provider(settings: Settings) -> FinancialProvider:
+    """`build_financial_provider`은(는) 입력 값과 설정을 결합해 새 결과 객체를 생성합니다."""
+
     if settings.financial_provider == "mock":
         return MockFinancialProvider()
     key = settings.dart_api_key.get_secret_value() if settings.dart_api_key else ""

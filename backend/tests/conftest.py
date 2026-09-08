@@ -20,8 +20,10 @@ os.environ.update(
         "AI_REPORT_PROVIDER": "mock",
         "ACCOUNT_SYNC_ENABLED": "true",
         "REALTIME_ENABLED": "false",
+        "REALTIME_SOURCE": "polling",
         "SCHEDULER_ENABLED": "false",
         "ADMIN_API_KEY": "test-admin-secret",
+        "ANALYSIS_API_KEY": "",
     }
 )
 

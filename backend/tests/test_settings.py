@@ -135,6 +135,23 @@ def test_production_account_sync_toss_url_requires_https():
         )
 
 
+def test_production_local_ai_provider_urls_require_https():
+    with pytest.raises(ValueError, match="Production FRED_BASE_URL must use HTTPS"):
+        Settings(
+            _env_file=None,
+            app_environment="production",
+            persistence_enabled=True,
+            database_url="postgresql+psycopg://stockpilot:password@database/stockpilot",
+            admin_api_key="a" * 32,
+            analysis_api_key="b" * 32,
+            cors_origins="https://stocks.example.com",
+            allowed_hosts="stocks.example.com",
+            local_ai_enabled=True,
+            fred_api_key="fred-key",
+            fred_base_url="http://fred.example.com",
+        )
+
+
 def test_production_persistence_rejects_non_postgresql_database_url():
     with pytest.raises(ValueError, match="requires PostgreSQL DATABASE_URL"):
         Settings(

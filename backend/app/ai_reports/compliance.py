@@ -1,3 +1,5 @@
+"""compliance 파일은 백엔드 도메인 기능을 담당한다."""
+
 import re
 from datetime import datetime
 from typing import Any
@@ -28,6 +30,8 @@ class ComplianceValidator:
     }
 
     def validate(self, report: dict[str, Any]) -> None:
+        """`validate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         required = ("disclaimer", "data_as_of", "is_investment_advice", "reference_signal")
         missing = [name for name in required if name not in report or report[name] in (None, "")]
         if missing:
@@ -62,6 +66,8 @@ class ComplianceValidator:
                 )
 
     def _strings(self, value: Any):
+        """`_strings`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if isinstance(value, str):
             yield value
         elif isinstance(value, dict):

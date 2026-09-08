@@ -1,3 +1,5 @@
+"""sanitization 파일은 백엔드 도메인 기능을 담당한다."""
+
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any

@@ -1,3 +1,5 @@
+"""validation 파일은 전략 검증과 성과 계산 기능을 담당한다."""
+
 from collections.abc import Callable
 from dataclasses import asdict
 from statistics import mean
@@ -16,12 +18,18 @@ VALIDATION_VERSION = "walk-forward-backtest-2026.2"
 
 
 class _ActivationStrategy(Strategy):
+    """`_ActivationStrategy` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     def __init__(self, delegate: Strategy, activation_index: int) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._delegate = delegate
         self._activation_index = activation_index
         self.name = delegate.name
 
     def signals(self, candles: pd.DataFrame) -> pd.Series:
+        """`signals`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         signals = self._delegate.signals(candles).copy()
         signals.iloc[: self._activation_index] = 0
         return signals
@@ -43,6 +51,8 @@ class WalkForwardBacktestValidator:
         n_splits: int = 3,
         warmup_candles: int = 60,
     ) -> dict:
+        """`run`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not 2 <= n_splits <= 6:
             raise ValueError("n_splits must be between 2 and 6")
         if warmup_candles < 21:
@@ -131,6 +141,8 @@ class WalkForwardBacktestValidator:
 
     @staticmethod
     def _stability(returns: list[float]) -> str:
+        """`_stability`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         profitable_ratio = sum(value > 0 for value in returns) / len(returns)
         average = mean(returns)
         if profitable_ratio >= 2 / 3 and average > 0:

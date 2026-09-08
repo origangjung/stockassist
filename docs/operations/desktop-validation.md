@@ -1,10 +1,13 @@
 # Desktop validation checklist
 
-<!-- current-alembic-head: 20260720_0021 -->
+<!-- current-alembic-head: 20260814_0022 -->
 
 Run this checklist on the desktop after receiving the laptop's tested changes. These tasks are
 kept off the space-constrained laptop. Pull only when the user has chosen to transfer the changes
 through the remote repository; do not create a commit or push merely to start this checklist.
+
+The latest records are [Desktop validation record: 2026-08-10](desktop-validation-20260810.md)
+and [Local reliability and model validation: 2026-08-12](local-reliability-validation-20260812.md).
 
 ## Required for the current handoff
 
@@ -14,7 +17,7 @@ through the remote repository; do not create a commit or push merely to start th
 - [ ] `docker compose config --quiet`
 - [ ] `docker compose build` and record image sizes
 - [ ] `docker compose up -d` and wait for healthy services
-- [ ] `docker compose exec api alembic heads` reports `20260720_0021`
+- [ ] `docker compose exec api alembic heads` reports `20260814_0022`
 - [ ] Confirm CI's `PostgreSQL migration round-trip` job passed before touching a persistent database
 - [ ] Confirm the three `created_at` lifecycle indexes exist in PostgreSQL
 - [ ] Confirm `corporate_actions` and `stock_candles.price_basis` exist after migration
@@ -23,6 +26,7 @@ through the remote repository; do not create a commit or push merely to start th
 - [ ] Verify the candle archive preview lists only complete monthly partitions older than the cutoff
 - [ ] Confirm candle archive preview reports `automatic_action=false`; do not detach or drop data
 - [ ] Keep automatic lifecycle cleanup disabled until the preview and policy are approved
+- [ ] Run `scripts\operations\backup_docker_data.ps1` and verify its manifest reports matching SHA-256 hashes
 - [ ] Perform the isolated backup/restore rehearsal in `postgresql-backup-restore.md`
 - [ ] Run the full backend and TypeScript checks from `DESKTOP_CODEX_HANDOFF.md`
 

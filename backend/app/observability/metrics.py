@@ -1,3 +1,5 @@
+"""metrics 파일은 백엔드 도메인 기능을 담당한다."""
+
 from time import perf_counter
 
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
@@ -27,15 +29,23 @@ DEPENDENCY_READY = Gauge(
 
 
 def metrics_app():
+    """`metrics_app`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return make_asgi_app()
 
 
 def record_dependency(name: str, ready: bool) -> None:
+    """`record_dependency`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     DEPENDENCY_READY.labels(dependency=name).set(1 if ready else 0)
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
+    """요청과 응답 사이에서 공통 정책을 적용하는 미들웨어입니다."""
+
     async def dispatch(self, request: Request, call_next):
+        """`dispatch`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         method = request.method
         started_at = perf_counter()
         status_code = 500

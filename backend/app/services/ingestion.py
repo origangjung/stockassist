@@ -1,3 +1,5 @@
+"""ingestion 파일은 애플리케이션 사용 사례 기능을 담당한다."""
+
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
@@ -16,6 +18,8 @@ from app.providers.errors import ProviderValidationError
 
 @dataclass(frozen=True)
 class IngestionSummary:
+    """`IngestionSummary` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     symbol: str
     provider: str
     raw_count: int
@@ -28,6 +32,8 @@ class IngestionSummary:
 
 
 class CandleIngestionService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(
         self,
         broker: BrokerAdapter,
@@ -37,6 +43,8 @@ class CandleIngestionService:
         pipeline: CandlePipeline | None = None,
         atomic_repository: CandleIngestionRepository | None = None,
     ):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._broker = broker
         self._stocks = stocks
         self._candles = candles
@@ -45,6 +53,8 @@ class CandleIngestionService:
         self._atomic_repository = atomic_repository
 
     def ingest_daily(self, symbol: str, limit: int = 120) -> IngestionSummary:
+        """`ingest_daily`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         symbol = symbol.strip().upper()
         batch = self._broker.candles(symbol, limit)
         provider = batch.provider
@@ -106,19 +116,27 @@ class CandleIngestionService:
 
 
 class IngestionUnavailableError(RuntimeError):
+    """해당 실패 조건을 호출 계층에 구분해 전달하는 예외입니다."""
+
     pass
 
 
 class IngestionOperationsService:
+    """사용 사례의 처리 순서와 하위 의존성 호출을 조율하는 서비스입니다."""
+
     def __init__(
         self,
         settings: Settings,
         ingestion: CandleIngestionService | None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._settings = settings
         self._ingestion = ingestion
 
     def status(self) -> dict[str, object]:
+        """`status`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return {
             "scheduler_enabled": self._settings.scheduler_enabled,
             "persistence_enabled": self._settings.persistence_enabled,
@@ -129,6 +147,8 @@ class IngestionOperationsService:
         }
 
     def ingest(self, symbol: str, *, limit: int | None = None) -> dict[str, object]:
+        """`ingest`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self._ingestion is None:
             raise IngestionUnavailableError("Candle persistence is disabled")
         normalized = symbol.strip().upper()

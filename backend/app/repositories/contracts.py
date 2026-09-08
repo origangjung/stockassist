@@ -1,3 +1,5 @@
+"""contracts 파일은 데이터 저장과 조회 기능을 담당한다."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
@@ -20,12 +22,16 @@ from app.providers.contracts import BrokerAccount, HoldingsSnapshot
 
 
 class StockRepository(ABC):
+    """`StockRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def upsert(self, stock: StockInfo) -> None: ...
 
 
 @dataclass(frozen=True)
 class CandlePriceBasisInventoryRow:
+    """`CandlePriceBasisInventoryRow` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     source_provider: str
     price_basis: str
     price_basis_rule_version: str
@@ -39,6 +45,8 @@ class CandlePriceBasisInventoryRow:
 
 @dataclass(frozen=True)
 class CandlePriceBasisInventory:
+    """`CandlePriceBasisInventory` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     rows: list[CandlePriceBasisInventoryRow]
     total_candles: int
     unknown_candles: int
@@ -48,6 +56,8 @@ class CandlePriceBasisInventory:
 
 
 class CandleRepository(ABC):
+    """`CandleRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save_many(
         self,
@@ -74,12 +84,16 @@ class CandleRepository(ABC):
 
 
 class QualityLogRepository(ABC):
+    """`QualityLogRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save_many(self, symbol: str, logs: list[DataQualityLog]) -> None: ...
 
 
 @dataclass(frozen=True)
 class CandleIngestionWrite:
+    """`CandleIngestionWrite` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     stock: StockInfo
     raw_candles: list[Candle]
     cleaned_candles: list[Candle]
@@ -91,11 +105,15 @@ class CandleIngestionWrite:
 
 
 class CandleIngestionRepository(ABC):
+    """`CandleIngestionRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save(self, batch: CandleIngestionWrite) -> None: ...
 
 
 class QualityLogReadRepository(ABC):
+    """`QualityLogReadRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def list_recent(
         self,
@@ -108,6 +126,8 @@ class QualityLogReadRepository(ABC):
 
 
 class BacktestRepository(ABC):
+    """`BacktestRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save(
         self,
@@ -132,6 +152,8 @@ class BacktestRepository(ABC):
 
 
 class ScoreWeightRepository(ABC):
+    """`ScoreWeightRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def get_active(self) -> ScoreWeights: ...
 
@@ -140,26 +162,36 @@ class ScoreWeightRepository(ABC):
 
 
 class FinancialRepository(ABC):
+    """`FinancialRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save(self, snapshot: FinancialSnapshot, *, source: str) -> None: ...
 
 
 class DisclosureRepository(ABC):
+    """`DisclosureRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save_many(self, disclosures: list[Disclosure], *, source: str) -> None: ...
 
 
 class NewsRepository(ABC):
+    """`NewsRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save_many(self, articles: list[NewsArticle], *, source: str) -> None: ...
 
 
 class InvestorFlowRepository(ABC):
+    """`InvestorFlowRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save(self, flow: InvestorFlow, *, source: str) -> None: ...
 
 
 class PredictionRepository(ABC):
+    """`PredictionRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save(self, prediction: PredictionResult, *, algorithm: str) -> None: ...
 
@@ -182,11 +214,15 @@ class PredictionRepository(ABC):
 
 
 class AIReportRepository(ABC):
+    """`AIReportRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save(self, report: dict) -> None: ...
 
 
 class PortfolioRepository(ABC):
+    """`PortfolioRepository` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     @abstractmethod
     def save_snapshot(
         self, provider: str, account: BrokerAccount, snapshot: HoldingsSnapshot

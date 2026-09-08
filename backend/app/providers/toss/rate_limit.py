@@ -1,3 +1,5 @@
+"""rate_limit 파일은 외부 데이터 공급자 연동 기능을 담당한다."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Lock
@@ -12,16 +14,27 @@ DEFAULT_GROUP_LIMITS: dict[str, float] = {
     "ACCOUNT": 1,
     "ASSET": 5,
     "STOCK": 5,
+    "STOCK_ALL": 1,
+    "STOCK_TRADING_TREND": 3,
     "MARKET_INFO": 3,
     "MARKET_DATA": 10,
     "MARKET_DATA_CHART": 5,
+    "MARKET_INDICATOR": 3,
+    "MARKET_INDICATOR_PRICE": 3,
+    "MARKET_INDICATOR_CHART": 3,
+    "RANKING": 3,
     "ORDER": 6,
+    "ORDER_HISTORY": 3,
+    "ORDER_INFO": 3,
     "CONDITIONAL_ORDER": 5,
+    "CONDITIONAL_ORDER_HISTORY": 3,
 }
 
 
 @dataclass
 class _Bucket:
+    """`_Bucket` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     rate: float
     capacity: float
     tokens: float
@@ -38,6 +51,8 @@ class TossRateLimiter:
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._clock = monotonic
         self._sleep = sleep
         now = monotonic()
@@ -48,6 +63,8 @@ class TossRateLimiter:
         self._lock = Lock()
 
     def acquire(self, group: str) -> None:
+        """`acquire`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         while True:
             with self._lock:
                 bucket = self._bucket(group)
@@ -67,6 +84,8 @@ class TossRateLimiter:
             self._sleep(delay)
 
     def observe(self, group: str, headers: Mapping[str, str]) -> None:
+        """`observe`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         raw_limit = headers.get("X-RateLimit-Limit")
         raw_remaining = headers.get("X-RateLimit-Remaining")
         with self._lock:
@@ -86,6 +105,8 @@ class TossRateLimiter:
                     pass
 
     def effective_rate(self, group: str) -> float:
+        """`effective_rate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         try:
             rate = self._buckets[group].rate
         except KeyError as exc:
@@ -97,6 +118,8 @@ class TossRateLimiter:
         return rate
 
     def retry_delay(self, attempt: int, retry_after: str | None) -> float:
+        """`retry_delay`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         server_delay = 0.0
         if retry_after:
             try:
@@ -106,6 +129,8 @@ class TossRateLimiter:
         return max(server_delay, float(2**attempt)) + random.uniform(0, 0.25)
 
     def _bucket(self, group: str) -> _Bucket:
+        """`_bucket`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         try:
             bucket = self._buckets[group]
         except KeyError as exc:

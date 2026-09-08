@@ -1,3 +1,5 @@
+"""sentry 파일은 백엔드 도메인 기능을 담당한다."""
+
 from typing import Any
 
 import sentry_sdk
@@ -8,6 +10,8 @@ _SENSITIVE_HEADERS = {"authorization", "cookie", "set-cookie", "x-admin-key"}
 
 
 def scrub_sensitive_data(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
+    """`scrub_sensitive_data`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     request = event.get("request")
     if not isinstance(request, dict):
         return event
@@ -22,6 +26,8 @@ def scrub_sensitive_data(event: dict[str, Any], _hint: dict[str, Any]) -> dict[s
 
 
 def configure_sentry(settings: Settings) -> bool:
+    """`configure_sentry`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     configured = settings.sentry_dsn
     dsn = configured.get_secret_value() if configured else ""
     if not dsn:

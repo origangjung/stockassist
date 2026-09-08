@@ -1,3 +1,5 @@
+"""corporate_action 파일은 데이터 저장과 조회 기능을 담당한다."""
+
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_EVEN, Decimal, DecimalException
@@ -18,12 +20,18 @@ class SqlAlchemyCorporateActionRepository:
     """Persist immutable source-event revisions for point-in-time reconstruction."""
 
     def __init__(self, sessions: sessionmaker[Session]) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save(self, action: CorporateActionRecord) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self.save_batch([action])
 
     def save_batch(self, actions: list[CorporateActionRecord]) -> tuple[int, int]:
+        """`save_batch`은(는) 데이터를 저장하거나 기존 상태에 추가합니다."""
+
         actions = [self._canonical(action) for action in actions]
         for action in actions:
             self._validate(action)
@@ -79,6 +87,8 @@ class SqlAlchemyCorporateActionRepository:
         return created, unchanged
 
     def list_known(self, symbol: str, *, as_of: datetime) -> list[CorporateActionRecord]:
+        """`list_known`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._require_aware(as_of)
         with self._sessions() as session:
             models = session.scalars(
@@ -104,6 +114,8 @@ class SqlAlchemyCorporateActionRepository:
         symbol: str | None = None,
         as_of: datetime | None = None,
     ) -> tuple[list[CorporateActionRecord], int]:
+        """`list_recent`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         filters = []
         if symbol is not None:
             filters.append(CorporateActionModel.symbol == symbol)
@@ -128,6 +140,8 @@ class SqlAlchemyCorporateActionRepository:
 
     @staticmethod
     def _record(model: CorporateActionModel) -> CorporateActionRecord:
+        """`_record`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return CorporateActionRecord(
             symbol=model.symbol,
             action_type=model.action_type,
@@ -150,6 +164,8 @@ class SqlAlchemyCorporateActionRepository:
 
     @staticmethod
     def _same_revision(model: CorporateActionModel, action: CorporateActionRecord) -> bool:
+        """`_same_revision`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return (
             model.symbol == action.symbol
             and model.action_type == action.action_type
@@ -173,10 +189,14 @@ class SqlAlchemyCorporateActionRepository:
         left: CorporateActionRecord,
         right: CorporateActionRecord,
     ) -> bool:
+        """`_same_record`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return replace(left, recorded_at=None) == replace(right, recorded_at=None)
 
     @staticmethod
     def _canonical(action: CorporateActionRecord) -> CorporateActionRecord:
+        """`_canonical`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         try:
             return replace(
                 action,
@@ -192,6 +212,8 @@ class SqlAlchemyCorporateActionRepository:
 
     @staticmethod
     def _validate(action: CorporateActionRecord) -> None:
+        """`_validate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         SqlAlchemyCorporateActionRepository._require_aware(action.effective_at)
         SqlAlchemyCorporateActionRepository._require_aware(action.known_at)
         if action.announced_at is not None:
@@ -203,9 +225,13 @@ class SqlAlchemyCorporateActionRepository:
 
     @staticmethod
     def _require_aware(value: datetime) -> None:
+        """`_require_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("Corporate action timestamps must be timezone-aware")
 
     @staticmethod
     def _aware(value: datetime) -> datetime:
+        """`_aware`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return value if value.tzinfo is not None else value.replace(tzinfo=UTC)

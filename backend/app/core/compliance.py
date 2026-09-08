@@ -1,3 +1,5 @@
+"""compliance 파일은 백엔드 도메인 기능을 담당한다."""
+
 from datetime import datetime, timezone
 
 
@@ -9,6 +11,8 @@ DISCLAIMER = (
 
 
 def compliance_metadata() -> dict[str, str | bool]:
+    """`compliance_metadata`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return {
         "data_as_of": datetime.now(timezone.utc).isoformat(),
         "disclaimer": DISCLAIMER,

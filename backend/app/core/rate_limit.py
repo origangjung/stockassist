@@ -1,3 +1,5 @@
+"""rate_limit 파일은 백엔드 도메인 기능을 담당한다."""
+
 from collections import OrderedDict, deque
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -97,6 +99,8 @@ class SlidingWindowLimiter:
         max_keys: int = 10_000,
         clock: Callable[[], float] = monotonic,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         if max_keys < 1:
             raise ValueError("max_keys must be positive")
         self._requests: OrderedDict[str, deque[float]] = OrderedDict()
@@ -106,6 +110,8 @@ class SlidingWindowLimiter:
         self._operations = 0
 
     def consume(self, key: str, *, limit: int, window: int) -> tuple[bool, int, int]:
+        """`consume`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if limit < 1 or window < 1:
             raise ValueError("limit and window must be positive")
         now = self._clock()
@@ -130,6 +136,8 @@ class SlidingWindowLimiter:
             return True, max(0, limit - len(requests)), 0
 
     def is_limited(self, key: str, *, limit: int, window: int) -> bool:
+        """`is_limited`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         now = self._clock()
         with self._lock:
             requests = self._requests.get(key)
@@ -143,6 +151,8 @@ class SlidingWindowLimiter:
             return len(requests) >= limit
 
     def clear(self, key: str | None = None) -> None:
+        """`clear`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._lock:
             if key is None:
                 self._requests.clear()
@@ -151,15 +161,21 @@ class SlidingWindowLimiter:
 
     @property
     def key_count(self) -> int:
+        """`key_count`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._lock:
             return len(self._requests)
 
     @staticmethod
     def _prune(requests: deque[float], cutoff: float) -> None:
+        """`_prune`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         while requests and requests[0] <= cutoff:
             requests.popleft()
 
     def _sweep(self, cutoff: float) -> None:
+        """`_sweep`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         for key, requests in list(self._requests.items()):
             self._prune(requests, cutoff)
             if not requests:
@@ -176,12 +192,16 @@ class RedisSlidingWindowLimiter:
         client: Redis | None = None,
         clock: Callable[[], float] = time,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         if client is None and not redis_url:
             raise ValueError("redis_url or client is required")
         self._redis = client or Redis.from_url(redis_url, decode_responses=True)
         self._clock = clock
 
     async def consume(self, key: str, *, limit: int, window: int) -> tuple[bool, int, int]:
+        """`consume`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if limit < 1 or window < 1:
             raise ValueError("limit and window must be positive")
         result = await self._redis.eval(
@@ -197,6 +217,8 @@ class RedisSlidingWindowLimiter:
         return bool(allowed), remaining, retry_after
 
     async def is_limited(self, key: str, *, limit: int, window: int) -> bool:
+        """`is_limited`은(는) 비동기로 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
         if limit < 1 or window < 1:
             raise ValueError("limit and window must be positive")
         result = await self._redis.eval(
@@ -210,18 +232,26 @@ class RedisSlidingWindowLimiter:
         return bool(int(result))
 
     async def clear(self, key: str) -> None:
+        """`clear`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         await self._redis.delete(self._key(key))
 
     async def aclose(self) -> None:
+        """`aclose`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         await self._redis.aclose()
 
     @staticmethod
     def _key(key: str) -> str:
+        """`_key`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         digest = sha256(key.encode("utf-8")).hexdigest()
         return f"stockpilot:rate-limit:{digest}"
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
+    """요청과 응답 사이에서 공통 정책을 적용하는 미들웨어입니다."""
+
     def __init__(
         self,
         app,
@@ -235,6 +265,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         redis_url: str | None = None,
         distributed_limiter: RedisSlidingWindowLimiter | None = None,
     ) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         super().__init__(app)
         self._enabled = enabled
         self._window = window_seconds
@@ -253,6 +285,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
 
     async def dispatch(self, request: Request, call_next):
+        """`dispatch`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not self._enabled or not request.url.path.startswith("/api/"):
             return await call_next(request)
         group = "expensive" if _is_expensive(request) else "general"
@@ -298,6 +332,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
     def _client_key(self, request: Request) -> str:
+        """`_client_key`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return client_ip_key(request, trust_proxy_headers=self._trust_proxy_headers)
 
     @staticmethod
@@ -309,6 +345,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         message: str,
         headers: dict[str, str],
     ) -> JSONResponse:
+        """`_error_response`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         request_id = getattr(request.state, "request_id", str(uuid4()))
         return JSONResponse(
             status_code=status_code,
@@ -325,6 +363,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 def _is_expensive(request: Request) -> bool:
+    """`_is_expensive`은(는) 입력 또는 현재 상태가 규칙을 만족하는지 검증합니다."""
+
     path = request.url.path.rstrip("/")
     expensive_posts = {
         "/api/v1/backtests",

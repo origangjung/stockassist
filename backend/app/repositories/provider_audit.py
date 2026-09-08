@@ -1,3 +1,5 @@
+"""provider_audit 파일은 데이터 저장과 조회 기능을 담당한다."""
+
 from dataclasses import asdict
 
 from datetime import datetime
@@ -10,10 +12,16 @@ from app.providers.audit import ProviderAuditEvent, ProviderAuditRecord
 
 
 class SqlAlchemyProviderAuditRepository:
+    """도메인 객체의 저장·조회 방식을 캡슐화하는 저장소입니다."""
+
     def __init__(self, sessions: sessionmaker[Session]) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._sessions = sessions
 
     def save(self, event: ProviderAuditEvent) -> None:
+        """`save`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         with self._sessions.begin() as session:
             session.add(ProviderAuditLogModel(**asdict(event)))
 
@@ -25,6 +33,8 @@ class SqlAlchemyProviderAuditRepository:
         provider: str | None = None,
         outcome: str | None = None,
     ) -> tuple[list[ProviderAuditRecord], int]:
+        """`list_recent`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         filters = []
         if provider:
             filters.append(ProviderAuditLogModel.provider == provider)
@@ -70,6 +80,8 @@ class SqlAlchemyProviderAuditRepository:
             )
 
     def delete_before(self, cutoff: datetime) -> int:
+        """`delete_before`은(는) 대상 데이터나 만료된 상태를 안전하게 제거합니다."""
+
         with self._sessions.begin() as session:
             result = session.execute(
                 delete(ProviderAuditLogModel).where(ProviderAuditLogModel.occurred_at < cutoff)

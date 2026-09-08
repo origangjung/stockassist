@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+from decimal import Decimal
 from io import BytesIO
 from zipfile import ZipFile
 
@@ -5,6 +7,12 @@ import httpx2
 
 from app.financials.dart import DartFinancialProvider
 from app.financials.providers import MockFinancialProvider
+from app.financials.valuation import (
+    ValuationAnalysisService,
+    ValuationInputs,
+    calculate_valuation_ratios,
+)
+from app.providers.mock import MockProvider
 from app.repositories.memory import InMemoryFinancialRepository
 from app.services.financial import FinancialAnalysisService
 
@@ -94,3 +102,35 @@ def test_dart_provider_resolves_corp_code_and_normalizes_accounts():
     assert snapshot.corp_code == "00126380"
     assert str(snapshot.revenue) == "258935"
     assert str(snapshot.total_equity) == "421502"
+
+
+def test_valuation_ratios_fail_closed_for_non_positive_denominators():
+    ratios = calculate_valuation_ratios(
+        price=Decimal("100"),
+        inputs=ValuationInputs(
+            revenue=Decimal("1000"),
+            net_income=Decimal("-10"),
+            equity=Decimal("0"),
+            shares_outstanding=Decimal("10"),
+            financial_data_as_of=datetime.now(timezone.utc),
+            source="test",
+        ),
+    )
+    assert ratios["market_cap"] == Decimal("1000")
+    assert ratios["per"] is None
+    assert ratios["pbr"] is None
+    assert ratios["psr"] == Decimal("1")
+    assert ratios["roe"] is None
+
+
+def test_mock_valuation_uses_quote_and_reported_shares():
+    market = MockProvider()
+    service = ValuationAnalysisService(
+        MockFinancialProvider(), lambda symbol: (market.get_quote(symbol), market.name)
+    )
+    result = service.analyze("005930", 2025)
+    assert result["per"] is not None
+    assert result["pbr"] is not None
+    assert result["psr"] is not None
+    assert result["roe"] is not None
+    assert result["experimental"] is True

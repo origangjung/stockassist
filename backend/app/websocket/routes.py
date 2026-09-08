@@ -1,3 +1,5 @@
+"""routes 파일은 백엔드 도메인 기능을 담당한다."""
+
 import logging
 from contextlib import suppress
 
@@ -24,6 +26,8 @@ async def _close_with_error(
     error_code: str,
     message: str,
 ) -> None:
+    """`_close_with_error`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     if websocket.client_state == WebSocketState.CONNECTED:
         with suppress(Exception):
             await websocket.send_json(
@@ -38,6 +42,8 @@ async def _close_with_error(
 
 @router.websocket("/ws/v1/quotes/{symbol}")
 async def quote_stream(websocket: WebSocket, symbol: str) -> None:
+    """`quote_stream`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     realtime_quote_hub: RealtimeHub = websocket.scope["app"].state.realtime_quote_hub
     origin = websocket.headers.get("origin")
     allowed_origins = getattr(websocket.scope["app"].state, "allowed_origins", frozenset())

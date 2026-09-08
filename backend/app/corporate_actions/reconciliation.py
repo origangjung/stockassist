@@ -1,3 +1,5 @@
+"""reconciliation 파일은 백엔드 도메인 기능을 담당한다."""
+
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -8,6 +10,8 @@ from app.corporate_actions.candidate_contracts import CorporateActionCandidate
 
 @dataclass(frozen=True)
 class CorporateActionRevisionGroup:
+    """`CorporateActionRevisionGroup` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     group_hint: str
     source: str
     symbol: str
@@ -28,6 +32,8 @@ class CorporateActionRevisionReconciler:
         self,
         candidates: tuple[CorporateActionCandidate, ...],
     ) -> tuple[CorporateActionRevisionGroup, ...]:
+        """`propose`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         buckets: dict[
             tuple[str, str, str, str, date | None],
             list[CorporateActionCandidate],
@@ -69,6 +75,8 @@ class CorporateActionRevisionReconciler:
     def _confidence(
         items: list[CorporateActionCandidate],
     ) -> tuple[str, tuple[str, ...]]:
+        """`_confidence`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if len(items) == 1:
             return "isolated", ("no_matching_receipt",)
         reasons = ["same_normalized_report_and_anchor"]
@@ -85,6 +93,8 @@ class CorporateActionRevisionReconciler:
 
     @staticmethod
     def _report_name(value: str | None) -> str:
+        """`_report_name`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if not value:
             return ""
         normalized = re.sub(r"^\s*(?:\[[^\]]*정정[^\]]*\]\s*)+", "", value)

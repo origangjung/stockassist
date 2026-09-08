@@ -1,3 +1,5 @@
+"""engine 파일은 백엔드 도메인 기능을 담당한다."""
+
 from dataclasses import dataclass
 from math import tanh
 from collections.abc import Mapping
@@ -21,10 +23,14 @@ AXIS_LABELS = {
 
 @dataclass(frozen=True)
 class ScoreWeights:
+    """`ScoreWeights` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     version: str
     weights: dict[str, float]
 
     def __post_init__(self) -> None:
+        """`__post_init__`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if set(self.weights) != set(SCORE_AXES):
             raise ValueError("weights must define all six score axes")
         if any(value < 0 for value in self.weights.values()) or sum(self.weights.values()) <= 0:
@@ -45,6 +51,8 @@ DEFAULT_WEIGHTS = ScoreWeights(
 
 
 def _clamp(value: float, lower: float = 0, upper: float = 100) -> float:
+    """`_clamp`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return max(lower, min(upper, value))
 
 
@@ -54,6 +62,8 @@ class TechnicalScoreCalculator:
     def calculate(
         self, candle: Candle, indicators: dict[str, Any]
     ) -> tuple[float | None, list[str]]:
+        """`calculate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         components: list[float] = []
         evidence: list[str] = []
         close = float(candle.close)
@@ -114,10 +124,14 @@ class TechnicalScoreCalculator:
 
 
 class ScoreEngine:
+    """입력 데이터로부터 결정론적 결과를 계산하는 엔진입니다."""
+
     version = ENGINE_VERSION
     status = "experimental"
 
     def __init__(self, weights: ScoreWeights = DEFAULT_WEIGHTS):
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self.weights = weights
 
     def aggregate(
@@ -125,6 +139,8 @@ class ScoreEngine:
         technical: AxisInput,
         additional_inputs: Mapping[str, AxisInput] | None = None,
     ) -> ScoreResult:
+        """`aggregate`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         technical_score, technical_evidence = technical
         inputs = {"technical": (technical_score, technical_evidence)}
         if additional_inputs:

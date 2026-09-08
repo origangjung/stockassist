@@ -16,6 +16,10 @@ node_modules
 .pnpm-store
 .uv-cache
 coverage
+test-results
+**/test-results
+playwright-report
+**/playwright-report
 dist
 build
 postgres-data

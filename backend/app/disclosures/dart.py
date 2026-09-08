@@ -1,3 +1,5 @@
+"""dart 파일은 백엔드 도메인 기능을 담당한다."""
+
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -14,6 +16,8 @@ class DartDisclosureProvider(DisclosureProvider):
     name = "dart"
 
     def __init__(self, dart: DartFinancialProvider) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._dart = dart
 
     @classmethod
@@ -25,6 +29,8 @@ class DartDisclosureProvider(DisclosureProvider):
         timeout_seconds: float = 15,
         transport: httpx2.BaseTransport | None = None,
     ) -> "DartDisclosureProvider":
+        """`create`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return cls(
             DartFinancialProvider.create(
                 base_url=base_url,
@@ -35,6 +41,8 @@ class DartDisclosureProvider(DisclosureProvider):
         )
 
     def list_disclosures(self, symbol: str, *, days: int, limit: int) -> list[Disclosure]:
+        """`list_disclosures`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         today = date.today()
         payload = self._dart.get_json(
             "list.json",
@@ -60,10 +68,14 @@ class DartDisclosureProvider(DisclosureProvider):
         return [_disclosure_from_row(symbol, row) for row in rows if isinstance(row, dict)]
 
     def close(self) -> None:
+        """`close`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         self._dart.close()
 
 
 def _disclosure_from_row(symbol: str, row: dict[str, Any]) -> Disclosure:
+    """`_disclosure_from_row`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     receipt_no = str(row.get("rcept_no") or "")
     filed_on = str(row.get("rcept_dt") or "")
     try:

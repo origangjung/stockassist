@@ -1,3 +1,5 @@
+"""contracts 파일은 백엔드 도메인 기능을 담당한다."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -8,6 +10,8 @@ from app.providers.contracts import Candle
 
 @dataclass(frozen=True)
 class PredictionResult:
+    """계산 또는 처리 결과를 묶어 전달하는 값 객체입니다."""
+
     symbol: str
     horizon_days: int
     rise_probability: Decimal
@@ -20,6 +24,8 @@ class PredictionResult:
 
 
 class PredictionEngine(Protocol):
+    """`PredictionEngine` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     algorithm: str
 
     def predict(
@@ -33,6 +39,8 @@ class PredictionEngine(Protocol):
 
 @dataclass(frozen=True)
 class ModelVersionRecord:
+    """저장하거나 전송할 한 건의 구조화된 데이터를 나타냅니다."""
+
     version: str
     symbol: str
     algorithm: str

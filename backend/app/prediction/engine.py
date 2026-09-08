@@ -1,3 +1,5 @@
+"""engine 파일은 백엔드 도메인 기능을 담당한다."""
+
 from datetime import timezone
 from decimal import Decimal
 from hashlib import sha256
@@ -14,12 +16,18 @@ from app.providers.contracts import Candle
 
 
 class XGBoostPredictionEngine:
+    """입력 데이터로부터 결정론적 결과를 계산하는 엔진입니다."""
+
     algorithm = "xgboost"
 
     def __init__(self, artifact_store: ModelArtifactStore | None = None) -> None:
+        """`__init__`은(는) 의존성과 초기 상태를 저장해 객체를 사용할 수 있게 초기화합니다."""
+
         self._artifact_store = artifact_store
 
     def predict(self, symbol: str, candles: list[Candle], *, horizon_days: int) -> PredictionResult:
+        """`predict`은(는) 입력 데이터를 기준으로 모델 또는 규칙의 결과 값을 계산해 반환합니다."""
+
         dataset = build_feature_dataset(candles, horizon_days)
         active = (
             self._artifact_store.current(
@@ -105,6 +113,8 @@ class XGBoostPredictionEngine:
 
     @staticmethod
     def _new_model() -> XGBClassifier:
+        """`_new_model`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return XGBClassifier(
             n_estimators=40,
             max_depth=3,
@@ -119,4 +129,6 @@ class XGBoostPredictionEngine:
 
 
 def _decimal(value: float) -> Decimal:
+    """`_decimal`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return Decimal(str(round(value, 6)))

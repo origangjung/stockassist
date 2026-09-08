@@ -1,3 +1,5 @@
+"""contracts 파일은 외부 데이터 공급자 연동 기능을 담당한다."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -10,12 +12,16 @@ CANDLE_PRICE_BASIS_VERIFICATION_STATUSES = frozenset({"unverified", "verified", 
 
 @dataclass(frozen=True)
 class CandlePriceBasisPolicy:
+    """`CandlePriceBasisPolicy` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     expected_basis: str
     verification_status: str
     rule_version: str
     evidence: str
 
     def __post_init__(self) -> None:
+        """`__post_init__`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self.expected_basis not in PRICE_BASES:
             raise ValueError("Unsupported Provider candle price basis")
         if self.verification_status not in CANDLE_PRICE_BASIS_VERIFICATION_STATUSES:
@@ -37,6 +43,8 @@ UNKNOWN_CANDLE_PRICE_BASIS_POLICY = CandlePriceBasisPolicy(
 
 
 class Capability(str, Enum):
+    """`Capability` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     QUOTE = "quote"
     ORDERBOOK = "orderbook"
     TRADES = "trades"
@@ -51,6 +59,8 @@ class Capability(str, Enum):
 
 @dataclass(frozen=True)
 class ProviderCapabilities:
+    """`ProviderCapabilities` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     supports_quote: bool = False
     supports_orderbook: bool = False
     supports_trades: bool = False
@@ -63,11 +73,15 @@ class ProviderCapabilities:
     supports_warnings: bool = False
 
     def supports(self, capability: Capability) -> bool:
+        """`supports`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         return bool(getattr(self, f"supports_{capability.value}"))
 
 
 @dataclass(frozen=True)
 class Quote:
+    """`Quote` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     symbol: str
     name: str | None
     price: Decimal
@@ -80,6 +94,8 @@ class Quote:
 
 @dataclass(frozen=True)
 class Candle:
+    """`Candle` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     timestamp: datetime
     open: Decimal
     high: Decimal
@@ -89,18 +105,24 @@ class Candle:
     price_basis: str = "unknown"
 
     def __post_init__(self) -> None:
+        """`__post_init__`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
         if self.price_basis not in PRICE_BASES:
             raise ValueError("Unsupported candle price basis")
 
 
 @dataclass(frozen=True)
 class OrderbookLevel:
+    """`OrderbookLevel` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     price: Decimal
     quantity: Decimal
 
 
 @dataclass(frozen=True)
 class Trade:
+    """`Trade` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     symbol: str
     price: Decimal
     quantity: Decimal
@@ -110,6 +132,8 @@ class Trade:
 
 @dataclass(frozen=True)
 class StockInfo:
+    """`StockInfo` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     symbol: str
     name: str
     market: str
@@ -120,6 +144,8 @@ class StockInfo:
 
 @dataclass(frozen=True)
 class StockWarning:
+    """`StockWarning` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     warning_type: str
     exchange: str | None
     start_date: date | None
@@ -128,6 +154,8 @@ class StockWarning:
 
 @dataclass(frozen=True)
 class BrokerAccount:
+    """`BrokerAccount` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     account_seq: int
     account_no: str
     account_type: str
@@ -135,6 +163,8 @@ class BrokerAccount:
 
 @dataclass(frozen=True)
 class Holding:
+    """`Holding` 관련 상태와 동작을 하나의 객체로 묶습니다."""
+
     symbol: str
     name: str
     market_country: str
@@ -157,6 +187,8 @@ class Holding:
 
 @dataclass(frozen=True)
 class HoldingsSnapshot:
+    """특정 시점에 관측된 데이터 상태를 변경 없이 전달하는 값 객체입니다."""
+
     account_seq: int
     total_purchase_amount: dict[str, Decimal | None]
     market_value: dict[str, Decimal | None]
@@ -172,6 +204,8 @@ class HoldingsSnapshot:
 
 
 class StockProvider(ABC):
+    """`StockProvider` 구현체가 제공해야 하는 메서드 계약을 정의합니다."""
+
     name: str
     capabilities: ProviderCapabilities
     candle_price_basis_policy = UNKNOWN_CANDLE_PRICE_BASIS_POLICY
@@ -195,9 +229,13 @@ class StockProvider(ABC):
     def get_warnings(self, symbol: str) -> list[StockWarning]: ...
 
     def get_accounts(self) -> list[BrokerAccount]:
+        """`get_accounts`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         raise NotImplementedError("This provider does not support account synchronization")
 
     def get_holdings(self, account_seq: int) -> HoldingsSnapshot:
+        """`get_holdings`은(는) 필요한 데이터를 조회해 반환합니다."""
+
         raise NotImplementedError("This provider does not support account synchronization")
 
     def close(self) -> None:

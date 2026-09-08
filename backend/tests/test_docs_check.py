@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.check_docs import (
+from scripts.operations.check_docs import (
     broken_local_links,
     migration_head_reference_violations,
     migration_heads,

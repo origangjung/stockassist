@@ -1,3 +1,5 @@
+"""errors 파일은 백엔드 도메인 기능을 담당한다."""
+
 import logging
 from datetime import datetime, timezone
 
@@ -21,6 +23,8 @@ logger = logging.getLogger(__name__)
 def _error_response(
     request: Request, status_code: int, code: str, message: str, data=None
 ) -> JSONResponse:
+    """`_error_response`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     request_id = getattr(request.state, "request_id", "unknown")
     response = JSONResponse(
         status_code=status_code,
@@ -38,6 +42,8 @@ def _error_response(
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """`http_exception_handler`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     message = exc.detail if isinstance(exc.detail, str) else "요청을 처리할 수 없습니다."
     data = None if isinstance(exc.detail, str) else exc.detail
     response = _error_response(
@@ -56,6 +62,8 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    """`validation_exception_handler`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     return _error_response(
         request,
         422,
@@ -66,6 +74,8 @@ async def validation_exception_handler(
 
 
 async def provider_exception_handler(request: Request, exc: ProviderError) -> JSONResponse:
+    """`provider_exception_handler`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     code = public_provider_error_code(exc.code)
     provider_request_id = (
         sanitize_external_text(exc.request_id, maximum=128) if exc.request_id else None
@@ -90,5 +100,7 @@ async def provider_exception_handler(request: Request, exc: ProviderError) -> JS
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """`unhandled_exception_handler`은(는) 비동기로 이름과 시그니처에 해당하는 단일 작업을 수행합니다."""
+
     logger.exception("Unhandled API error", exc_info=exc)
     return _error_response(request, 500, "INTERNAL_ERROR", "서버 내부 오류가 발생했습니다.")

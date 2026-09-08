@@ -1,3 +1,5 @@
+"""ai_report 파일은 데이터베이스 영속 모델 기능을 담당한다."""
+
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Integer, JSON, String
@@ -7,6 +9,8 @@ from app.database.base import Base
 
 
 class AIReportModel(Base):
+    """데이터베이스에 저장되는 필드와 관계를 정의하는 ORM 모델입니다."""
+
     __tablename__ = "ai_reports"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

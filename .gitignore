@@ -15,6 +15,8 @@ node_modules/
 .corepack/
 .uv-cache/
 .next/
+frontend/playwright-report/
+frontend/test-results/
 *.tsbuildinfo
 .ui-debug-profile/
 ui-*-preview.png
@@ -26,7 +28,9 @@ htmlcov/
 dist/
 build/
 artifacts/
+datasets/
 *.log
+datasets/local-ai-incremental/task-logs/
 *.sqlite
 *.sqlite3
 *.pem
