@@ -141,6 +141,17 @@ class PaperOrderRequest(BaseModel):
     idempotency_key: str = Field(pattern=r"^[0-9a-f-]{36}$")
 
 
+class FundAllocationProposalRequest(BaseModel):
+    """실제 주문 없이 모의 계좌의 목표 비중과 리밸런싱 후보를 계산하는 입력값이다."""
+
+    symbols: list[str] = Field(min_length=2, max_length=12)
+    objective: Literal["min_volatility", "max_sharpe"] = "min_volatility"
+    invest_ratio: Decimal = Field(default=Decimal("0.90"), gt=0, le=Decimal("0.95"))
+    min_asset_weight: Decimal = Field(default=Decimal("0"), ge=0, le=Decimal("0.40"))
+    max_asset_weight: Decimal = Field(default=Decimal("0.40"), gt=0, le=Decimal("0.40"))
+    lookback_days: int = Field(default=180, ge=60, le=365)
+
+
 class PriceAlertCreateRequest(BaseModel):
     """API 요청 본문의 필드와 검증 규칙을 정의합니다."""
 

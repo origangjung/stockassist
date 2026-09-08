@@ -69,6 +69,7 @@ from app.services.score import ScoreService
 from app.services.ai_report import AIReportService
 from app.services.portfolio import PortfolioService
 from app.services.paper_trading import PaperTradingService
+from app.fund_management import FundManagementService, PyPortfolioOptOptimizer
 from app.services.alerts import ReferenceAlertService
 from app.services.operations import OperationsStatusService
 from app.services.data_quality import DataQualityHistoryService
@@ -312,6 +313,11 @@ portfolio_service = PortfolioService(
     repository=portfolio_repository,
 )
 paper_trading_service = PaperTradingService(market_service, paper_trading_repository)
+fund_management_service = FundManagementService(
+    market_service,
+    paper_trading_service,
+    PyPortfolioOptOptimizer(),
+)
 reference_alert_service = ReferenceAlertService(broker_adapter, alert_repository)
 realtime_quote_hub = build_realtime_quote_hub(settings, broker_adapter)
 health_service = build_health_service(settings, sessions)

@@ -24,6 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=9.0.3,<10.0", "ruff>=0.8,<1.0"]
 ml = ["scikit-learn>=1.5,<2.0", "xgboost>=2.1,<4.0"]
+portfolio = ["PyPortfolioOpt>=1.6,<2.0"]
 
 [build-system]
 requires = ["setuptools>=75"]

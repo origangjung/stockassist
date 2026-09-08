@@ -16,6 +16,7 @@ from app.api.schemas import (
     BacktestStrategyComparisonRequest,
     BacktestValidationRequest,
     CorporateActionApprovalRequest,
+    FundAllocationProposalRequest,
     PriceAlertCreateRequest,
     PaperOrderRequest,
     TossConditionalOrderRequest,
@@ -65,6 +66,8 @@ from app.services.local_ai_readiness import LocalAiReadinessService
 from app.services.ai_report import AIReportService
 from app.services.portfolio import PortfolioService
 from app.services.paper_trading import PaperTradingService
+from app.fund_management.contracts import FundManagementError
+from app.fund_management.service import FundManagementService
 from app.paper_trading.contracts import (
     InsufficientPaperCashError,
     InsufficientPaperPositionError,
@@ -225,6 +228,13 @@ def get_paper_trading_service() -> PaperTradingService:
     from app.main import paper_trading_service
 
     return paper_trading_service
+
+
+def get_fund_management_service() -> FundManagementService:
+    """프로세스에서 공유하는 모의 자금운용 제안 서비스를 반환한다."""
+    from app.main import fund_management_service
+
+    return fund_management_service
 
 
 def get_reference_alert_service() -> ReferenceAlertService:
@@ -443,6 +453,25 @@ def reset_paper_portfolio(
 ):
     """실제 계좌에는 영향 없이 해당 모의 계좌만 초기화한다."""
     return envelope(service.reset(account_id))
+
+
+@router.post(
+    "/paper-portfolios/{account_id}/allocation-proposals",
+    response_model=ApiEnvelope,
+    tags=["fund-management"],
+)
+def create_allocation_proposal(
+    request: FundAllocationProposalRequest,
+    account_id: str = Path(pattern=r"^[0-9a-f-]{36}$"),
+    service: FundManagementService = Depends(get_fund_management_service),
+):
+    """과거 가격과 모의 보유량으로 실행되지 않는 자금배분 제안을 생성한다."""
+    try:
+        return envelope(service.propose(account_id, **request.model_dump()))
+    except UnknownSymbolError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FundManagementError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/stocks/{symbol}/quote", response_model=ApiEnvelope)
