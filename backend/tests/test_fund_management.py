@@ -34,6 +34,7 @@ def test_allocation_proposal_uses_optimizer_without_executing_orders():
     assert result["execution_enabled"] is False
     assert result["is_real_order"] is False
     assert all(action["side"] == "buy" for action in result["rebalance_actions"])
+    assert all(Decimal(action["notional"]) <= Decimal("3000") for action in result["rebalance_actions"])
     assert client.get(f"/api/v1/paper-portfolios/{account_id}").json()["data"]["orders"] == []
 
 

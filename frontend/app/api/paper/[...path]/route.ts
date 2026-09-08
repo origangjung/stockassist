@@ -16,7 +16,7 @@ function publicError(status: number, message: string) {
 function upstreamPath(parts: string[]): string | null {
   if (!UUID_PATTERN.test(parts[0] ?? "")) return null;
   if (parts.length === 1) return `/api/v1/paper-portfolios/${parts[0]}`;
-  if (parts.length === 2 && ["orders", "reset"].includes(parts[1])) {
+  if (parts.length === 2 && ["orders", "reset", "allocation-proposals"].includes(parts[1])) {
     return `/api/v1/paper-portfolios/${parts[0]}/${parts[1]}`;
   }
   return null;
@@ -31,15 +31,15 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   if (request.method === "POST" && path.length !== 2) return publicError(405, "허용되지 않은 요청입니다.");
 
   let body: string | undefined;
-  if (request.method === "POST" && path[1] === "orders") {
+  if (request.method === "POST" && ["orders", "allocation-proposals"].includes(path[1])) {
     if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
       return publicError(415, "JSON 요청만 허용됩니다.");
     }
     body = await request.text();
     if (new TextEncoder().encode(body).byteLength > MAX_REQUEST_BYTES) {
-      return publicError(413, "주문 요청이 너무 큽니다.");
+      return publicError(413, "모의투자 요청이 너무 큽니다.");
     }
-    try { JSON.parse(body); } catch { return publicError(400, "주문 JSON 형식이 올바르지 않습니다."); }
+    try { JSON.parse(body); } catch { return publicError(400, "모의투자 JSON 형식이 올바르지 않습니다."); }
   }
 
   const base = (
@@ -49,7 +49,8 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     ?? "http://127.0.0.1:8000"
   ).replace(/\/$/, "");
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeoutMs = path[1] === "allocation-proposals" ? 45_000 : 15_000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";

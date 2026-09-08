@@ -168,6 +168,13 @@ class FundManagementService:
             delta = target_value - current_value
             if equity <= ZERO or abs(delta) / equity < MIN_REBALANCE_RATIO:
                 continue
+            action_notional = abs(delta)
+            staged = False
+            if delta > ZERO:
+                max_buy_notional = equity * DEFAULT_PAPER_RISK_POLICY.max_order_ratio
+                if action_notional > max_buy_notional:
+                    action_notional = max_buy_notional
+                    staged = True
             last_price = Decimal(str(
                 metadata.get(symbol, {}).get(
                     "last_price", current_positions.get(symbol, {}).get("last_price", ZERO)
@@ -178,9 +185,17 @@ class FundManagementService:
             actions.append({
                 "symbol": symbol,
                 "side": "buy" if delta > ZERO else "sell",
-                "quantity": (abs(delta) / last_price).quantize(QUANTITY_UNIT, rounding=ROUND_DOWN),
-                "notional": abs(delta).quantize(Decimal("0.01")),
+                "quantity": (action_notional / last_price).quantize(
+                    QUANTITY_UNIT, rounding=ROUND_DOWN
+                ),
+                "notional": action_notional.quantize(Decimal("0.01")),
                 "target_weight": target_weight,
-                "reason": "target_allocation_gap" if symbol in universe else "outside_universe",
+                "reason": (
+                    "staged_for_order_limit"
+                    if staged
+                    else "target_allocation_gap"
+                    if symbol in universe
+                    else "outside_universe"
+                ),
             })
         return actions

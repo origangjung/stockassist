@@ -65,6 +65,32 @@ export interface PaperPortfolio {
   is_real_order: false;
 }
 
+/** 자금배분 엔진이 반환하는 실행 전용이 아닌 목표 비중과 단계별 모의주문 후보다. */
+export interface FundAllocationProposal {
+  account_id: string;
+  currency: "KRW" | "USD";
+  objective: "min_volatility" | "max_sharpe";
+  optimizer: string;
+  lookback_days: number;
+  observation_count: number;
+  equity: string;
+  target_weights: Record<string, string>;
+  target_cash_weight: string;
+  current_weights: Record<string, string>;
+  rebalance_actions: Array<{
+    symbol: string;
+    side: "buy" | "sell";
+    quantity: string;
+    notional: string;
+    target_weight: string;
+    reason: "target_allocation_gap" | "outside_universe" | "staged_for_order_limit";
+  }>;
+  estimated_turnover: string;
+  warnings: string[];
+  execution_enabled: false;
+  is_real_order: false;
+}
+
 const ACCOUNT_KEY = "stockpilot:paper-account-id";
 
 /** 개인정보 없이 브라우저에만 보관되는 모의투자 계정 식별자를 반환한다. */
@@ -116,4 +142,22 @@ export function createPaperOrder(
 /** `resetPaperPortfolio`은(는) 이름과 시그니처에 해당하는 단일 작업을 수행합니다. */
 export function resetPaperPortfolio(accountId: string): Promise<PaperPortfolio> {
   return request(`/${accountId}/reset`, { method: "POST" });
+}
+
+/** 선택한 종목과 운용 성향으로 실제 주문 없는 목표배분 제안을 생성한다. */
+export function createAllocationProposal(
+  accountId: string,
+  input: {
+    symbols: string[];
+    objective: "min_volatility" | "max_sharpe";
+    invest_ratio: string;
+    max_asset_weight: string;
+    lookback_days: number;
+  },
+): Promise<FundAllocationProposal> {
+  return request(`/${accountId}/allocation-proposals`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }

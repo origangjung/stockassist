@@ -10,15 +10,15 @@ ARG INSTALL_ML=false
 COPY pyproject.toml uv.lock README.md ./
 COPY alembic.ini ./
 RUN if [ "$INSTALL_ML" = "true" ]; then \
-      uv sync --locked --no-dev --extra ml --no-install-project; \
+      uv sync --locked --no-dev --extra ml --extra portfolio --no-install-project; \
     else \
-      uv sync --locked --no-dev --no-install-project; \
+      uv sync --locked --no-dev --extra portfolio --no-install-project; \
     fi
 COPY backend ./backend
 RUN if [ "$INSTALL_ML" = "true" ]; then \
-      uv sync --locked --no-dev --extra ml; \
+      uv sync --locked --no-dev --extra ml --extra portfolio; \
     else \
-      uv sync --locked --no-dev; \
+      uv sync --locked --no-dev --extra portfolio; \
     fi && \
     groupadd --system --gid 10001 stockpilot && \
     useradd --system --uid 10001 --gid stockpilot --home-dir /nonexistent stockpilot && \

@@ -16,6 +16,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { fetchPaperPortfolio, getPaperAccountId, type PaperPortfolio } from "../../lib/paper-api";
+import { FundAllocationPlanner } from "./fund-allocation-planner";
 
 type Currency = "KRW" | "USD";
 
@@ -152,6 +153,12 @@ export function PaperPortfolioDashboard() {
                 </p>
               </section>
             )}
+
+            <FundAllocationPlanner
+              currency={currency}
+              key={currency}
+              onPortfolioChanged={load}
+            />
 
             <section className="paper-holdings" aria-labelledby="paper-holdings-title">
               <header><div><h2 id="paper-holdings-title">보유 종목</h2><span>{positions.length}개</span></div><a href="/?focus=search"><Search size={15} /> 종목 추가</a></header>
